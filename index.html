@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>خريطة الفريق</title>
+<style>
+  :root {
+    --background:#ffffff; --canvas:#fbfbfc; --surface:#f6f6f8; --foreground:#17171a;
+    --muted:#6b6b74; --faint:#9a9aa2; --border:#e3e3e7; --border-strong:#d4d4d9;
+    --accent:#2554eb; --accent-text:#ffffff; --owner-bg:#131316; --owner-text:#ffffff;
+    --line:#d6d6db; --badge-employee-bg:#e0e9ff; --badge-employee-text:#1d3fc9;
+    --badge-owner-bg:#131316; --badge-owner-text:#ffffff; --badge-freelancer-bg:#fdecd2;
+    --badge-freelancer-text:#8a5a12; --badge-group-bg:#e7e7ea; --badge-group-text:#55555c;
+    --shadow:0 1px 2px rgba(20,20,25,.04);
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --background:#0c0c0e; --canvas:#0c0c0e; --surface:#16161a; --foreground:#f2f2f4;
+    --muted:#9d9da6; --faint:#6d6d76; --border:#27272c; --border-strong:#34343a;
+    --accent:#4d79ff; --accent-text:#ffffff; --owner-bg:#f2f2f4; --owner-text:#131316;
+    --line:#2c2c32; --badge-employee-bg:rgba(77,121,255,.16); --badge-employee-text:#9db4ff;
+    --badge-owner-bg:#f2f2f4; --badge-owner-text:#131316; --badge-freelancer-bg:rgba(232,166,58,.16);
+    --badge-freelancer-text:#e8b45c; --badge-group-bg:#202024; --badge-group-text:#b5b5bd; --shadow:none;
+  }}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--background);color:var(--foreground);
+    font-family:"SF Arabic","Segoe UI Arabic","Noto Sans Arabic",Tahoma,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  .chart-wrap{max-width:1180px;margin:0 auto;padding:40px 20px 80px}
+  .chart-head{text-align:center;margin-bottom:44px}
+  .chart-head h1{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.01em}
+  .chart-head p{margin:0;color:var(--muted);font-size:13.5px}
+  .node{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;
+    border-radius:12px;background:var(--background);border:1px solid var(--border-strong);
+    color:var(--foreground);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;
+    box-shadow:var(--shadow);transition:background .12s,color .12s,border-color .12s,transform .08s;white-space:nowrap}
+  .node:hover:not(:disabled){border-color:var(--accent);transform:translateY(-1px)}
+  .node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .node-selected{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .node-owner{border-radius:999px;background:var(--owner-bg);color:var(--owner-text);
+    border-color:var(--owner-bg);padding:12px 26px;font-size:14.5px;font-weight:700}
+  .node-owner.node-selected{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .node-label{background:transparent;border-color:transparent;color:var(--muted);font-weight:700;font-size:13px;padding:6px 10px}
+  .node-label:hover:not(:disabled){transform:none}
+  .node-label.node-selected{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .node-group{border-style:dashed;color:var(--muted);font-weight:600;padding:6px 14px;font-size:13px;border-radius:10px}
+  .node-group.node-selected{color:var(--accent-text);border-style:solid}
+  .stem-arrow{position:relative;width:2px;height:26px;background:var(--line);margin:12px auto}
+  .stem-arrow::after{content:"";position:absolute;bottom:0;right:-3px;width:8px;height:8px;
+    border-right:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg)}
+  .trunk{display:flex;flex-direction:column;align-items:center}
+  .col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;position:relative}
+  .row{display:flex;align-items:flex-start;justify-content:center;gap:12px;flex-wrap:wrap}
+  .branches{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-top:24px}
+  .branches::before{content:"";position:absolute;top:0;left:16.6%;right:16.6%;height:0;border-top:2px solid var(--line)}
+  .branches .col::before{content:"";position:absolute;top:-24px;right:50%;width:2px;height:24px;background:var(--line);transform:translateX(50%)}
+  .divider{border:none;border-top:1px solid var(--border);margin:40px 0 28px}
+  .more-hint{text-align:center;color:var(--faint);font-size:12px;margin-top:20px}
+  .cross-band{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .cross-col{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .cross-title{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;font-weight:700;margin-bottom:12px}
+  .arrow-ico{color:var(--faint)}
+  .cross-wrap{display:flex;flex-wrap:wrap;gap:8px}
+  .pa-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .detail{margin-top:36px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px 28px}
+  .detail-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .detail-name{font-size:21px;font-weight:800;margin:0 0 4px}
+  .detail-sub{color:var(--muted);font-size:13.5px;margin:0}
+  .badge{flex-shrink:0;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px}
+  .badge-employee{background:var(--badge-employee-bg);color:var(--badge-employee-text)}
+  .badge-owner{background:var(--badge-owner-bg);color:var(--badge-owner-text)}
+  .badge-freelancer{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text)}
+  .badge-group{background:var(--badge-group-bg);color:var(--badge-group-text)}
+  .detail-stats{display:flex;gap:22px;flex-wrap:wrap;margin:16px 0 14px;padding:12px 0;
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:13px}
+  .detail-stats b{color:var(--muted);font-weight:700}
+  .detail-stats span{color:var(--foreground);font-weight:600}
+  .detail-list{margin:0;padding:0;list-style:none}
+  .detail-list li{position:relative;padding-right:18px;margin-bottom:9px;font-size:14px;line-height:1.6}
+  .detail-list li::before{content:"";position:absolute;right:0;top:9px;width:5px;height:5px;border-radius:999px;background:var(--faint)}
+  .empty-note{font-size:13.5px;color:var(--faint)}
+  .tasks-block{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+  .tasks-title{font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:10px}
+  .task-list{list-style:none;margin:0;padding:0}
+  .task-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 0;border-bottom:1px dashed var(--border);font-size:13.5px}
+  .task-list li:last-child{border-bottom:none}
+  .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;
+    background:var(--badge-group-bg);color:var(--badge-group-text);white-space:nowrap}
+  .pill-priority{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text)}
+  .state{max-width:1180px;margin:0 auto;padding:80px 20px;text-align:center;color:var(--muted);font-size:15px}
+  .state.err{color:#dc2626}
+  @media (max-width:760px){
+    .branches{flex-direction:column;gap:8px}
+    .branches::before,.branches .col::before{display:none}
+    .col{margin-bottom:20px}
+    .cross-band{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){.node{transition:none}}
+</style>
+</head>
+<body>
+  <div id="app"><div class="state">جارٍ تحميل خريطة الفريق…</div></div>
+
+<script>
+const SUPA_URL = "https://wkmzxshebhkboliqsbib.supabase.co";
+const SUPA_KEY = "sb_publishable_BuV9pAaraK7vLz1AtEn8zg_L97wdZFW";
+
+// Fixed seed IDs — these define the exact chart layout (mirrors the app).
+const P = {
+  ali:"00000000-0000-0000-0000-0000000000a1", ahmad:"00000000-0000-0000-0000-0000000000a2",
+  sami:"00000000-0000-0000-0000-0000000000a3", malek:"00000000-0000-0000-0000-0000000000a4",
+  osama:"00000000-0000-0000-0000-0000000000a5", kamal:"00000000-0000-0000-0000-0000000000a6",
+  ahsan:"00000000-0000-0000-0000-0000000000a7", haitham:"00000000-0000-0000-0000-0000000000a8",
+  mohammed:"00000000-0000-0000-0000-0000000000a9", raafat:"00000000-0000-0000-0000-0000000000b2",
+  anas:"00000000-0000-0000-0000-0000000000b1",
+};
+
+const classificationLabel = { owner:"Owner", employee:"موظف", freelancer:"Freelancer", not_yet_defined:"غير محدد" };
+
+function formatManagerList(names){
+  const clean = names.filter(n => n && n.trim().length>0);
+  if(clean.length===0) return "";
+  if(clean.length===1) return clean[0];
+  return clean[0] + clean.slice(1).map(n=>" و"+n).join("");
+}
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+async function sb(path){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers:{ apikey:SUPA_KEY, Authorization:"Bearer "+SUPA_KEY }, cache:"no-store" });
+  if(!r.ok) throw new Error("Supabase "+r.status+" على "+path);
+  return r.json();
+}
+
+let DETAILS = {}, DEFAULT_ID = P.ahmad;
+
+function statusLabel(s){ return {not_yet_defined:"غير محددة",planned:"مخطط",in_progress:"قيد التنفيذ",done:"منجزة"}[s]||s; }
+
+function renderDetail(id){
+  const d = DETAILS[id];
+  const host = document.getElementById("detail");
+  if(!d || !host) return;
+  document.querySelectorAll(".node").forEach(n=>n.classList.toggle("node-selected", n.dataset.detail===id));
+  const bullets = d.bullets && d.bullets.length
+    ? `<ul class="detail-list">${d.bullets.map(b=>`<li>${esc(b)}</li>`).join("")}</ul>`
+    : `<p class="empty-note">${esc(d.emptyNote||"لا توجد تفاصيل مسجّلة بعد.")}</p>`;
+  const tasks = (d.tasks && d.tasks.length)
+    ? `<div class="tasks-block"><div class="tasks-title">المهام</div><ul class="task-list">${
+        d.tasks.map(t=>`<li><span>${esc(t.title)}</span><span class="pill ${t.isTopPriority?"pill-priority":""}">${esc(statusLabel(t.status))}</span></li>`).join("")
+      }</ul></div>` : "";
+  host.innerHTML = `
+    <div class="detail-top">
+      <div><p class="detail-sub">${esc(d.subtitle)}</p><h2 class="detail-name">${esc(d.name)}</h2></div>
+      <span class="badge badge-${d.badge}">${esc(d.badgeLabel)}</span>
+    </div>
+    <div class="detail-stats">
+      <div><b>الفريق:</b> <span>${esc(d.team)}</span></div>
+      <div><b>الإدارة:</b> <span>${esc(d.manager)}</span></div>
+    </div>${bullets}${tasks}`;
+  host.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function nodeHtml(label, kind, detailId){
+  const cls = "node " + (kind==="owner"?"node-owner ":kind==="label"?"node-label ":kind==="group"?"node-group ":"");
+  return `<button type="button" class="${cls.trim()}" data-detail="${detailId||""}" ${detailId?"":"disabled"}>${esc(label)}</button>`;
+}
+
+function build(data){
+  const people = data.people, groups = data.groups;
+  const personById = new Map(people.map(p=>[p.id,p]));
+  const groupBySlug = new Map(groups.map(g=>[g.slug,g]));
+  const nameOf = id => personById.get(id)?.full_name_ar ?? "";
+  const byId = id => personById.get(id);
+
+  // roles / responsibilities / memberships / managers / tasks maps
+  const rolesById = new Map(data.roles.map(r=>[r.id,r.name_ar]));
+  const rolesByPerson = new Map();
+  data.personRoles.forEach(pr=>{ const a=rolesByPerson.get(pr.person_id)||[]; a.push(rolesById.get(pr.role_id)); rolesByPerson.set(pr.person_id,a.filter(Boolean)); });
+  const respByPerson = new Map();
+  data.responsibilities.forEach(r=>{ const a=respByPerson.get(r.person_id)||[]; a.push(r.description_ar); respByPerson.set(r.person_id,a); });
+  const memberGroupsByPerson = new Map();
+  data.memberships.forEach(m=>{ const a=memberGroupsByPerson.get(m.person_id)||[]; a.push(m.org_group_id); memberGroupsByPerson.set(m.person_id,a); });
+  const managersByGroup = new Map();
+  [...data.managers].sort((a,b)=>a.display_order-b.display_order).forEach(m=>{ const a=managersByGroup.get(m.org_group_id)||[]; a.push(nameOf(m.person_id)); managersByGroup.set(m.org_group_id,a); });
+  const memberIdsByGroup = new Map();
+  data.memberships.forEach(m=>{ const a=memberIdsByGroup.get(m.org_group_id)||[]; a.push(m.person_id); memberIdsByGroup.set(m.org_group_id,a); });
+  const tasksByPerson = new Map();
+  const taskById = new Map(data.tasks.map(t=>[t.id,t]));
+  data.assignments.forEach(a=>{ const t=taskById.get(a.task_id); if(!t)return; const arr=tasksByPerson.get(a.person_id)||[]; arr.push({title:t.title,status:t.status,isTopPriority:t.is_top_priority}); tasksByPerson.set(a.person_id,arr); });
+
+  const groupById = new Map(groups.map(g=>[g.id,g]));
+
+  // ---- detail cards ----
+  DETAILS = {};
+  people.forEach(p=>{
+    const roles = rolesByPerson.get(p.id)||[];
+    const teams = groups.filter(g=>(memberIdsByGroup.get(g.id)||[]).includes(p.id)).map(g=>g.name_ar);
+    const badge = p.classification==="owner"?"owner":p.classification==="freelancer"?"freelancer":"employee";
+    DETAILS[p.id] = {
+      name: p.nickname ? `${p.full_name_ar} «${p.nickname}»` : p.full_name_ar,
+      subtitle: roles.slice(0,2).join(" · ") || "—",
+      badge, badgeLabel: classificationLabel[p.classification],
+      team: teams.join(" / ") || "—",
+      manager: p.manager_id ? (byId(p.manager_id)?.full_name_ar ?? "—") : "—",
+      bullets: respByPerson.get(p.id)||[],
+      tasks: tasksByPerson.get(p.id)||[],
+    };
+  });
+  groups.forEach(g=>{
+    const typeLabel = g.group_type==="team"?"فريق":g.group_type==="function"?"وظيفة":"مجموعة";
+    DETAILS[g.slug] = {
+      name: g.name_ar, subtitle: g.description ?? "—", badge:"group", badgeLabel:typeLabel,
+      team: g.parent_group_id ? (groupById.get(g.parent_group_id)?.name_ar ?? "—") : "Teams",
+      manager: formatManagerList(managersByGroup.get(g.id)||[]) || "—",
+      bullets: [], emptyNote:"لم تُحدد التفاصيل بعد.",
+    };
+  });
+  DETAILS["teams"] = { name:"Teams", subtitle:"المظلة التي تضم الفرق الثلاثة", badge:"group", badgeLabel:"قسم رئيسي",
+    team:"—", manager:"—", bullets:[
+      "يتفرّع إلى ثلاثة فرق فقط: Management وMedia وSales.",
+      "Freelancers تصنيف عمل، وOperations وظيفة عابرة للفرق — وليسا فريقًا رابعًا." ] };
+
+  // ---- node builders ----
+  const pNode = (id, kind="person") => nodeHtml(byId(id)?.full_name_ar ?? "?", kind, id);
+  const gNode = (slug, kind="group") => { const g=groupBySlug.get(slug); return nodeHtml(g?.name_ar ?? slug, kind, slug); };
+  const mgmtMembers = (memberIdsByGroup.get(groupBySlug.get("management")?.id)||[]);
+
+  const html = `
+  <div class="chart-wrap">
+    <div class="chart-head"><h1>خريطة الفريق</h1><p>اضغط على أي اسم أو مجموعة لعرض تفاصيلها بالأسفل</p></div>
+    <div class="trunk">${nodeHtml("علي — صاحب الشركة","owner",P.ali)}<div class="stem-arrow"></div>${nodeHtml("Teams","label","teams")}</div>
+    <div class="branches">
+      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>
+        <div class="row">${mgmtMembers.map(id=>pNode(id)).join("")}</div></div>
+      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>
+        ${pNode(P.ahmad)}<div class="stem-arrow"></div>${pNode(P.ahsan)}<div class="stem-arrow"></div>
+        <div class="row">${pNode(P.haitham)}${pNode(P.mohammed)}</div>
+        <div class="stem-arrow"></div>${gNode("freelance-editors")}</div>
+      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>
+        <div class="row">${pNode(P.sami)}${pNode(P.malek)}</div>
+        <div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
+        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div></div>
+    </div>
+    <div class="more-hint">علاقات عابرة للفرق بالأسفل</div>
+    <hr class="divider" />
+    <div class="cross-band">
+      <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Freelancers</div>
+        <div class="cross-wrap">${gNode("setters")}${gNode("closers")}${pNode(P.raafat)}${pNode(P.anas)}${gNode("freelance-editors")}</div></div>
+      <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Operations</div>
+        <div class="cross-wrap">${pNode(P.kamal)}${pNode(P.osama)}</div></div>
+      <div class="cross-col"><div class="cross-title">علاقة شخصية مباشرة</div>
+        <div class="pa-line">${pNode(P.ali)}<span class="arrow-ico">←</span>${pNode(P.kamal)}</div></div>
+    </div>
+    <div class="detail" id="detail"></div>
+  </div>`;
+
+  document.getElementById("app").innerHTML = html;
+  document.querySelectorAll(".node").forEach(n=>{
+    if(!n.dataset.detail) return;
+    n.addEventListener("click", ()=>renderDetail(n.dataset.detail));
+  });
+  renderDetail(DEFAULT_ID);
+}
+
+(async function(){
+  try {
+    const [people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks] = await Promise.all([
+      sb("people?deleted_at=is.null&select=*"),
+      sb("org_groups?deleted_at=is.null&select=*"),
+      sb("org_group_managers?select=*&order=display_order"),
+      sb("person_org_group_memberships?select=*"),
+      sb("roles?select=*"),
+      sb("person_roles?select=*"),
+      sb("responsibilities?select=person_id,description_ar,display_order&order=display_order"),
+      sb("task_assignments?select=*"),
+      sb("tasks?deleted_at=is.null&select=id,title,status,is_top_priority"),
+    ]);
+    build({people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks});
+  } catch(e){
+    document.getElementById("app").innerHTML = `<div class="state err">تعذّر تحميل البيانات.<br>${esc(e.message)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
