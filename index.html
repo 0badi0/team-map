@@ -2,504 +2,288 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>خريطة الفريق</title>
 <style>
-  :root{
-    --bg:#ffffff;--surface:#f6f6f8;--fg:#17171a;--muted:#6b6b74;--faint:#9a9aa2;
-    --border:#e3e3e7;--border-strong:#d4d4d9;--accent:#2554eb;--accent-text:#fff;--danger:#dc2626;
-    --owner:#131316;--amber-bg:#fdecd2;--amber-text:#8a5a12;--blue-bg:#e0e9ff;--blue-text:#1d3fc9;
-    --grp-bg:#ececef;--grp-text:#55555c;
+  :root {
+    --background:#ffffff; --canvas:#fbfbfc; --surface:#f6f6f8; --foreground:#17171a;
+    --muted:#6b6b74; --faint:#9a9aa2; --border:#e3e3e7; --border-strong:#d4d4d9;
+    --accent:#2554eb; --accent-text:#ffffff; --owner-bg:#131316; --owner-text:#ffffff;
+    --line:#d6d6db; --badge-employee-bg:#e0e9ff; --badge-employee-text:#1d3fc9;
+    --badge-owner-bg:#131316; --badge-owner-text:#ffffff; --badge-freelancer-bg:#fdecd2;
+    --badge-freelancer-text:#8a5a12; --badge-group-bg:#e7e7ea; --badge-group-text:#55555c;
+    --shadow:0 1px 2px rgba(20,20,25,.04);
   }
   @media (prefers-color-scheme:dark){:root{
-    --bg:#0c0c0e;--surface:#161619;--fg:#f2f2f4;--muted:#9d9da6;--faint:#6d6d76;
-    --border:#27272c;--border-strong:#3a3a40;--accent:#4d79ff;--owner:#f2f2f4;
-    --amber-bg:#3a2e18;--amber-text:#e8b45c;--blue-bg:#1b2748;--blue-text:#9db4ff;--grp-bg:#202024;--grp-text:#b5b5bd;
+    --background:#0c0c0e; --canvas:#0c0c0e; --surface:#16161a; --foreground:#f2f2f4;
+    --muted:#9d9da6; --faint:#6d6d76; --border:#27272c; --border-strong:#34343a;
+    --accent:#4d79ff; --accent-text:#ffffff; --owner-bg:#f2f2f4; --owner-text:#131316;
+    --line:#2c2c32; --badge-employee-bg:rgba(77,121,255,.16); --badge-employee-text:#9db4ff;
+    --badge-owner-bg:#f2f2f4; --badge-owner-text:#131316; --badge-freelancer-bg:rgba(232,166,58,.16);
+    --badge-freelancer-text:#e8b45c; --badge-group-bg:#202024; --badge-group-text:#b5b5bd; --shadow:none;
   }}
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);
-    font-family:"SF Arabic","Segoe UI Arabic","Noto Sans Arabic",Tahoma,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  #cy{position:fixed;inset:52px 0 0 0;background:
-    radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0) 0 0/22px 22px;}
-  .bar{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;gap:8px;
-    padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);z-index:20}
-  .bar h1{font-size:15px;font-weight:800;margin:0;margin-inline-end:8px;white-space:nowrap}
-  .spacer{flex:1}
-  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:9px;border:1px solid var(--border-strong);
-    background:var(--bg);color:var(--fg);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;text-decoration:none}
-  .btn:hover{border-color:var(--accent)}
-  .btn:disabled{opacity:.5;cursor:default}
-  .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
-  .btn-on{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
-  .btn-danger{color:var(--danger);border-color:var(--danger)}
-  .btn-sm{padding:6px 10px;font-size:12px}
-  .hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:var(--fg);color:var(--bg);
-    padding:8px 16px;border-radius:999px;font-size:12.5px;font-weight:600;z-index:20;opacity:0;transition:opacity .2s;pointer-events:none}
-  .hint.show{opacity:.92}
-  /* side panel */
-  .panel{position:fixed;top:52px;bottom:0;left:0;width:380px;max-width:88vw;background:var(--bg);
-    border-inline-end:1px solid var(--border);box-shadow:2px 0 24px rgba(0,0,0,.08);z-index:15;
-    transform:translateX(-105%);transition:transform .22s ease;overflow-y:auto;padding:20px}
-  html[dir=rtl] .panel{left:auto;right:0;border-inline-end:none;border-inline-start:1px solid var(--border);transform:translateX(105%)}
-  .panel.open{transform:translateX(0)}
-  .panel-close{position:absolute;top:14px;left:14px;border:none;background:transparent;color:var(--muted);font-size:20px;cursor:pointer}
-  html[dir=rtl] .panel-close{left:14px;right:auto}
-  .p-badge{display:inline-block;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px;margin-bottom:10px}
-  .b-owner{background:var(--owner);color:var(--bg)}.b-emp{background:var(--blue-bg);color:var(--blue-text)}
-  .b-free{background:var(--amber-bg);color:var(--amber-text)}.b-grp{background:var(--grp-bg);color:var(--grp-text)}
-  .p-name{font-size:20px;font-weight:800;margin:0 0 4px}
-  .p-sub{color:var(--muted);font-size:13px;margin:0 0 16px}
-  .p-stats{font-size:13px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:12px 0;margin-bottom:14px;display:flex;flex-direction:column;gap:7px}
-  .p-stats b{color:var(--muted);font-weight:700}
-  .sec-t{font-size:12px;font-weight:800;color:var(--muted);margin:18px 0 10px;letter-spacing:.02em}
-  ul.plain{list-style:none;margin:0;padding:0}
-  ul.plain li{position:relative;padding-inline-start:16px;margin-bottom:8px;font-size:13.5px;line-height:1.55}
-  ul.plain li::before{content:"";position:absolute;inset-inline-start:0;top:8px;width:5px;height:5px;border-radius:9px;background:var(--faint)}
-  .trow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px dashed var(--border);font-size:13.5px}
-  .trow:last-child{border-bottom:none}
-  .tlink{font-weight:600;color:var(--fg);text-decoration:none;cursor:pointer;text-align:start;background:none;border:none;font:inherit;padding:0}
-  .tlink:hover{color:var(--accent);text-decoration:underline}
-  .pill{font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--grp-bg);color:var(--grp-text);white-space:nowrap}
-  .pill-prio{background:var(--amber-bg);color:var(--amber-text)}
-  .doc-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 0;border-bottom:1px dashed var(--border);font-size:13px}
-  .doc-row a{color:var(--fg);text-decoration:none;font-weight:600;word-break:break-all}
-  .doc-row a:hover{color:var(--accent)}
-  .icon-btn{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:15px;padding:2px 5px}
-  .icon-btn:hover{color:var(--danger)}
-  .field{display:flex;flex-direction:column;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:12px}
-  .field input,.field select,.field textarea{padding:9px 11px;border-radius:9px;border:1px solid var(--border-strong);
-    background:var(--bg);color:var(--fg);font-size:14px;font-family:inherit}
-  .field textarea{min-height:70px;resize:vertical}
-  .muted{color:var(--muted);font-size:13px}
-  .addbar{display:flex;gap:6px;margin-top:8px}
-  .addbar input{flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--bg);color:var(--fg);font-family:inherit}
-  .edit-actions{display:flex;gap:8px;margin:14px 0 6px;flex-wrap:wrap}
-  /* modal */
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40;display:none;align-items:center;justify-content:center;padding:20px}
-  .modal-bg.open{display:flex}
-  .modal{width:100%;max-width:360px;background:var(--bg);border:1px solid var(--border);border-radius:16px;padding:26px 24px}
-  .modal h3{margin:0 0 16px;font-size:18px;font-weight:800}
-  .err{color:var(--danger);font-size:12.5px;min-height:1px;margin:0 0 10px}
-  .loading{position:fixed;inset:52px 0 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px}
-  @media (max-width:520px){ .bar h1{display:none} .btn{padding:7px 10px;font-size:12px} }
+  html,body{margin:0;padding:0}
+  body{background:var(--background);color:var(--foreground);
+    font-family:"SF Arabic","Segoe UI Arabic","Noto Sans Arabic",Tahoma,"Segoe UI",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;}
+  .chart-wrap{max-width:1180px;margin:0 auto;padding:40px 20px 80px}
+  .chart-head{text-align:center;margin-bottom:44px}
+  .chart-head h1{font-size:22px;font-weight:800;margin:0 0 6px;letter-spacing:-.01em}
+  .chart-head p{margin:0;color:var(--muted);font-size:13.5px}
+  .node{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 18px;
+    border-radius:12px;background:var(--background);border:1px solid var(--border-strong);
+    color:var(--foreground);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;
+    box-shadow:var(--shadow);transition:background .12s,color .12s,border-color .12s,transform .08s;white-space:nowrap}
+  .node:hover:not(:disabled){border-color:var(--accent);transform:translateY(-1px)}
+  .node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .node-selected{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .node-owner{border-radius:999px;background:var(--owner-bg);color:var(--owner-text);
+    border-color:var(--owner-bg);padding:12px 26px;font-size:14.5px;font-weight:700}
+  .node-owner.node-selected{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .node-label{background:transparent;border-color:transparent;color:var(--muted);font-weight:700;font-size:13px;padding:6px 10px}
+  .node-label:hover:not(:disabled){transform:none}
+  .node-label.node-selected{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .node-group{border-style:dashed;color:var(--muted);font-weight:600;padding:6px 14px;font-size:13px;border-radius:10px}
+  .node-group.node-selected{color:var(--accent-text);border-style:solid}
+  .stem-arrow{position:relative;width:2px;height:26px;background:var(--line);margin:12px auto}
+  .stem-arrow::after{content:"";position:absolute;bottom:0;right:-3px;width:8px;height:8px;
+    border-right:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg)}
+  .trunk{display:flex;flex-direction:column;align-items:center}
+  .col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;position:relative}
+  .row{display:flex;align-items:flex-start;justify-content:center;gap:12px;flex-wrap:wrap}
+  .branches{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-top:24px}
+  .branches::before{content:"";position:absolute;top:0;left:16.6%;right:16.6%;height:0;border-top:2px solid var(--line)}
+  .branches .col::before{content:"";position:absolute;top:-24px;right:50%;width:2px;height:24px;background:var(--line);transform:translateX(50%)}
+  .divider{border:none;border-top:1px solid var(--border);margin:40px 0 28px}
+  .more-hint{text-align:center;color:var(--faint);font-size:12px;margin-top:20px}
+  .cross-band{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .cross-col{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px}
+  .cross-title{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;font-weight:700;margin-bottom:12px}
+  .arrow-ico{color:var(--faint)}
+  .cross-wrap{display:flex;flex-wrap:wrap;gap:8px}
+  .pa-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .detail{margin-top:36px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:26px 28px}
+  .detail-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .detail-name{font-size:21px;font-weight:800;margin:0 0 4px}
+  .detail-sub{color:var(--muted);font-size:13.5px;margin:0}
+  .badge{flex-shrink:0;font-size:12px;font-weight:700;padding:5px 12px;border-radius:999px}
+  .badge-employee{background:var(--badge-employee-bg);color:var(--badge-employee-text)}
+  .badge-owner{background:var(--badge-owner-bg);color:var(--badge-owner-text)}
+  .badge-freelancer{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text)}
+  .badge-group{background:var(--badge-group-bg);color:var(--badge-group-text)}
+  .detail-stats{display:flex;gap:22px;flex-wrap:wrap;margin:16px 0 14px;padding:12px 0;
+    border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:13px}
+  .detail-stats b{color:var(--muted);font-weight:700}
+  .detail-stats span{color:var(--foreground);font-weight:600}
+  .detail-list{margin:0;padding:0;list-style:none}
+  .detail-list li{position:relative;padding-right:18px;margin-bottom:9px;font-size:14px;line-height:1.6}
+  .detail-list li::before{content:"";position:absolute;right:0;top:9px;width:5px;height:5px;border-radius:999px;background:var(--faint)}
+  .empty-note{font-size:13.5px;color:var(--faint)}
+  .tasks-block{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+  .tasks-title{font-size:12.5px;font-weight:700;color:var(--muted);margin-bottom:10px}
+  .task-list{list-style:none;margin:0;padding:0}
+  .task-list li{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:8px 0;border-bottom:1px dashed var(--border);font-size:13.5px}
+  .task-list li:last-child{border-bottom:none}
+  .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;
+    background:var(--badge-group-bg);color:var(--badge-group-text);white-space:nowrap}
+  .pill-priority{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text)}
+  .state{max-width:1180px;margin:0 auto;padding:80px 20px;text-align:center;color:var(--muted);font-size:15px}
+  .state.err{color:#dc2626}
+  .admin-link{position:fixed;top:14px;left:14px;font-size:12.5px;font-weight:600;color:var(--muted);
+    text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--surface);z-index:10}
+  .admin-link:hover{color:var(--accent);border-color:var(--accent)}
+  @media (max-width:760px){
+    .branches{flex-direction:column;gap:8px}
+    .branches::before,.branches .col::before{display:none}
+    .col{margin-bottom:20px}
+    .cross-band{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){.node{transition:none}}
 </style>
 </head>
 <body>
-<div class="bar">
-  <h1>خريطة الفريق</h1>
-  <button class="btn btn-sm" id="fitBtn" title="ملاءمة العرض">⤢ ملاءمة</button>
-  <div class="spacer"></div>
-  <span id="editTools" style="display:none;gap:8px" >
-    <button class="btn btn-sm" id="addPerson">+ شخص</button>
-    <button class="btn btn-sm" id="addDept">+ قسم</button>
-    <button class="btn btn-sm" id="connectBtn" title="اسحب من صندوق إلى آخر لرسم سهم">🔗 توصيل</button>
-  </span>
-  <span id="who" class="muted" style="margin-inline:6px"></span>
-  <button class="btn btn-sm" id="authBtn">دخول للتعديل</button>
-</div>
+  <a class="admin-link" href="./admin.html">تسجيل الدخول للإدارة ↗</a>
+  <div id="app"><div class="state">جارٍ تحميل خريطة الفريق…</div></div>
 
-<div id="cy"></div>
-<div class="loading" id="loading">جارٍ تحميل الخريطة…</div>
-<div class="hint" id="hint"></div>
-
-<div class="panel" id="panel"><button class="panel-close" id="panelClose">×</button><div id="panelBody"></div></div>
-
-<div class="modal-bg" id="loginModal">
-  <div class="modal">
-    <h3>تسجيل الدخول للتعديل</h3>
-    <p class="err" id="lerr"></p>
-    <div class="field">البريد الإلكتروني<input id="lemail" type="email" autocomplete="username"></div>
-    <div class="field">كلمة المرور<input id="lpw" type="password" autocomplete="current-password"></div>
-    <div style="display:flex;gap:8px;margin-top:6px">
-      <button class="btn btn-primary" id="loginGo" style="flex:1;justify-content:center">دخول</button>
-      <button class="btn" id="loginCancel">إلغاء</button>
-    </div>
-  </div>
-</div>
-
-<script src="./vendor/cytoscape.min.js"></script>
-<script src="./vendor/dagre.min.js"></script>
-<script src="./vendor/cytoscape-dagre.min.js"></script>
-<script src="./supabase.js"></script>
 <script>
-const SUPA_URL="https://wkmzxshebhkboliqsbib.supabase.co";
-const SUPA_KEY="sb_publishable_BuV9pAaraK7vLz1AtEn8zg_L97wdZFW";
-const db = supabase.createClient(SUPA_URL, SUPA_KEY, { auth:{ persistSession:true, autoRefreshToken:true } });
-if (window.cytoscapeDagre) cytoscape.use(window.cytoscapeDagre);
+const SUPA_URL = "https://wkmzxshebhkboliqsbib.supabase.co";
+const SUPA_KEY = "sb_publishable_BuV9pAaraK7vLz1AtEn8zg_L97wdZFW";
 
-const CLASS={owner:"Owner",employee:"موظف",freelancer:"Freelancer",not_yet_defined:"غير محدد"};
-const STATUS={not_yet_defined:"غير محددة",planned:"مخطط",in_progress:"قيد التنفيذ",done:"منجزة"};
-const GTYPE={team:"فريق",function:"وظيفة",subgroup:"مجموعة"};
-const esc=(s)=>String(s??"").replace(/[&<>"']/g,c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-const $=id=>document.getElementById(id);
-let ME=null, cy=null, connectMode=false, connSource=null, DATA={};
-
-function hint(m,ms=2200){ const h=$("hint"); h.textContent=m; h.classList.add("show"); clearTimeout(h._t); h._t=setTimeout(()=>h.classList.remove("show"),ms); }
-function canEdit(){ return ME && (ME.role==="admin"||ME.role==="editor"); }
-const nid=(kind,id)=>(kind==="person"?"p:":"g:")+id;
-const parseNid=(s)=>({ kind: s[0]==="p"?"person":"group", id: s.slice(2) });
-
-async function loadMe(){
-  // Anon visitors have no stored token — skip instantly. Logged-in users may
-  // have their session restored a beat after load, so poll briefly until ready.
-  const hasToken = Object.keys(localStorage).some(k=>k.startsWith("sb-") && k.includes("-auth-token"));
-  if(!hasToken){ ME=null; return; }
-  let session=null;
-  for(let i=0;i<15 && !session;i++){
-    session=(await db.auth.getSession()).data.session;
-    if(!session) await new Promise(r=>setTimeout(r,180));
-  }
-  if(!session){ ME=null; return; }
-  const { data } = await db.from("app_users").select("id,email,app_role,is_disabled").eq("id",session.user.id).maybeSingle();
-  ME = (data && !data.is_disabled) ? { id:data.id, email:data.email, role:data.app_role } : null;
-}
-
-async function fetchAll(){
-  const [people,groups,conns] = await Promise.all([
-    db.from("people").select("*").is("deleted_at",null).then(r=>r.data||[]),
-    db.from("org_groups").select("*").is("deleted_at",null).then(r=>r.data||[]),
-    db.from("connections").select("*").then(r=>r.data||[]),
-  ]);
-  DATA={people,groups,conns};
-  DATA.personById=new Map(people.map(p=>[p.id,p]));
-  DATA.groupById=new Map(groups.map(g=>[g.id,g]));
-  return DATA;
-}
-
-function elements(){
-  const els=[];
-  for(const p of DATA.people){
-    const cls = p.classification==="owner"?"owner":p.classification==="freelancer"?"free":"person";
-    const node={ data:{ id:nid("person",p.id), label:p.nickname?`${p.full_name_ar} «${p.nickname}»`:p.full_name_ar, kind:"person", cls }, classes:cls };
-    if(p.pos_x!=null&&p.pos_y!=null) node.position={x:p.pos_x,y:p.pos_y};
-    els.push(node);
-  }
-  for(const g of DATA.groups){
-    const node={ data:{ id:nid("group",g.id), label:g.name_ar, kind:"group", cls:"group" }, classes:"group" };
-    if(g.pos_x!=null&&g.pos_y!=null) node.position={x:g.pos_x,y:g.pos_y};
-    els.push(node);
-  }
-  const nodeIds=new Set(els.map(e=>e.data.id));
-  for(const c of DATA.conns){
-    const s=nid(c.source_kind,c.source_id), t=nid(c.target_kind,c.target_id);
-    if(nodeIds.has(s)&&nodeIds.has(t)) els.push({ data:{ id:c.id, source:s, target:t } });
-  }
-  return els;
-}
-
-// Cytoscape renders to canvas — it can't read CSS vars, so use resolved colors.
-const DARK = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-const C = DARK ? {
-  bg:"#16161a", fg:"#f2f2f4", line:"#3a3a40", accent:"#4d79ff", owner:"#f2f2f4", ownerText:"#131316",
-  amberBg:"#3a2e18", amberText:"#e8b45c", grpBg:"#202024", grpText:"#b5b5bd", personBorder:"#3a3a40"
-} : {
-  bg:"#ffffff", fg:"#17171a", line:"#c9c9d0", accent:"#2554eb", owner:"#131316", ownerText:"#ffffff",
-  amberBg:"#fdecd2", amberText:"#8a5a12", grpBg:"#ececef", grpText:"#55555c", personBorder:"#d4d4d9"
+// Fixed seed IDs — these define the exact chart layout (mirrors the app).
+const P = {
+  ali:"00000000-0000-0000-0000-0000000000a1", ahmad:"00000000-0000-0000-0000-0000000000a2",
+  sami:"00000000-0000-0000-0000-0000000000a3", malek:"00000000-0000-0000-0000-0000000000a4",
+  osama:"00000000-0000-0000-0000-0000000000a5", kamal:"00000000-0000-0000-0000-0000000000a6",
+  ahsan:"00000000-0000-0000-0000-0000000000a7", haitham:"00000000-0000-0000-0000-0000000000a8",
+  mohammed:"00000000-0000-0000-0000-0000000000a9", raafat:"00000000-0000-0000-0000-0000000000b2",
+  anas:"00000000-0000-0000-0000-0000000000b1",
 };
-const STYLE=[
-  { selector:"node", style:{
-    "label":"data(label)","text-valign":"center","text-halign":"center","font-size":"14px",
-    "font-family":'"SF Arabic","Segoe UI Arabic",Tahoma,sans-serif',"color":C.fg,
-    "background-color":C.bg,"border-width":1.5,"border-color":C.personBorder,
-    "shape":"round-rectangle","width":"label","height":"label","padding":"12px","text-wrap":"wrap","text-max-width":"170px" } },
-  { selector:"node.owner", style:{ "background-color":C.owner,"color":C.ownerText,"border-color":C.owner,"font-weight":"bold" } },
-  { selector:"node.free", style:{ "background-color":C.amberBg,"color":C.amberText,"border-color":C.amberBg } },
-  { selector:"node.group", style:{ "background-color":C.grpBg,"color":C.grpText,"border-style":"dashed","border-color":C.personBorder } },
-  { selector:"node:selected", style:{ "border-width":3,"border-color":C.accent } },
-  { selector:"edge", style:{ "width":2,"line-color":C.line,"target-arrow-color":C.line,
-    "target-arrow-shape":"triangle","curve-style":"bezier","arrow-scale":1.1 } },
-  { selector:"edge:selected", style:{ "line-color":C.accent,"target-arrow-color":C.accent,"width":3 } },
-  { selector:".eh-handle", style:{ "background-color":C.accent,"width":12,"height":12,"shape":"ellipse","border-width":2,"border-color":"#fff" } },
-  { selector:".eh-ghost-edge,.eh-preview", style:{ "line-color":C.accent,"target-arrow-color":C.accent,"target-arrow-shape":"triangle","width":2 } },
-];
 
-function initCy(){
-  // Only use saved positions when EVERY node has one, otherwise re-run the
-  // hierarchical layout (avoids nodes piling at origin when positions are partial).
-  const allPos = DATA.people.every(p=>p.pos_x!=null) && DATA.groups.every(g=>g.pos_x!=null);
-  cy = cytoscape({
-    container:$("cy"), elements:elements(), style:STYLE, wheelSensitivity:0.25,
-    minZoom:0.2, maxZoom:2.5, boxSelectionEnabled:false, pixelRatio:1,
-    autoungrabify:true, layout:{ name:"preset" }
+const classificationLabel = { owner:"Owner", employee:"موظف", freelancer:"Freelancer", not_yet_defined:"غير محدد" };
+
+function formatManagerList(names){
+  const clean = names.filter(n => n && n.trim().length>0);
+  if(clean.length===0) return "";
+  if(clean.length===1) return clean[0];
+  return clean[0] + clean.slice(1).map(n=>" و"+n).join("");
+}
+function esc(s){ return String(s??"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+async function sb(path){
+  const r = await fetch(`${SUPA_URL}/rest/v1/${path}`, { headers:{ apikey:SUPA_KEY, Authorization:"Bearer "+SUPA_KEY }, cache:"no-store" });
+  if(!r.ok) throw new Error("Supabase "+r.status+" على "+path);
+  return r.json();
+}
+
+let DETAILS = {}, DEFAULT_ID = P.ahmad;
+
+function statusLabel(s){ return {not_yet_defined:"غير محددة",planned:"مخطط",in_progress:"قيد التنفيذ",done:"منجزة"}[s]||s; }
+
+function renderDetail(id){
+  const d = DETAILS[id];
+  const host = document.getElementById("detail");
+  if(!d || !host) return;
+  document.querySelectorAll(".node").forEach(n=>n.classList.toggle("node-selected", n.dataset.detail===id));
+  const bullets = d.bullets && d.bullets.length
+    ? `<ul class="detail-list">${d.bullets.map(b=>`<li>${esc(b)}</li>`).join("")}</ul>`
+    : `<p class="empty-note">${esc(d.emptyNote||"لا توجد تفاصيل مسجّلة بعد.")}</p>`;
+  const tasks = (d.tasks && d.tasks.length)
+    ? `<div class="tasks-block"><div class="tasks-title">المهام</div><ul class="task-list">${
+        d.tasks.map(t=>`<li><span>${esc(t.title)}</span><span class="pill ${t.isTopPriority?"pill-priority":""}">${esc(statusLabel(t.status))}</span></li>`).join("")
+      }</ul></div>` : "";
+  host.innerHTML = `
+    <div class="detail-top">
+      <div><p class="detail-sub">${esc(d.subtitle)}</p><h2 class="detail-name">${esc(d.name)}</h2></div>
+      <span class="badge badge-${d.badge}">${esc(d.badgeLabel)}</span>
+    </div>
+    <div class="detail-stats">
+      <div><b>الفريق:</b> <span>${esc(d.team)}</span></div>
+      <div><b>الإدارة:</b> <span>${esc(d.manager)}</span></div>
+    </div>${bullets}${tasks}`;
+  host.scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+
+function nodeHtml(label, kind, detailId){
+  const cls = "node " + (kind==="owner"?"node-owner ":kind==="label"?"node-label ":kind==="group"?"node-group ":"");
+  return `<button type="button" class="${cls.trim()}" data-detail="${detailId||""}" ${detailId?"":"disabled"}>${esc(label)}</button>`;
+}
+
+function build(data){
+  const people = data.people, groups = data.groups;
+  const personById = new Map(people.map(p=>[p.id,p]));
+  const groupBySlug = new Map(groups.map(g=>[g.slug,g]));
+  const nameOf = id => personById.get(id)?.full_name_ar ?? "";
+  const byId = id => personById.get(id);
+
+  // roles / responsibilities / memberships / managers / tasks maps
+  const rolesById = new Map(data.roles.map(r=>[r.id,r.name_ar]));
+  const rolesByPerson = new Map();
+  data.personRoles.forEach(pr=>{ const a=rolesByPerson.get(pr.person_id)||[]; a.push(rolesById.get(pr.role_id)); rolesByPerson.set(pr.person_id,a.filter(Boolean)); });
+  const respByPerson = new Map();
+  data.responsibilities.forEach(r=>{ const a=respByPerson.get(r.person_id)||[]; a.push(r.description_ar); respByPerson.set(r.person_id,a); });
+  const memberGroupsByPerson = new Map();
+  data.memberships.forEach(m=>{ const a=memberGroupsByPerson.get(m.person_id)||[]; a.push(m.org_group_id); memberGroupsByPerson.set(m.person_id,a); });
+  const managersByGroup = new Map();
+  [...data.managers].sort((a,b)=>a.display_order-b.display_order).forEach(m=>{ const a=managersByGroup.get(m.org_group_id)||[]; a.push(nameOf(m.person_id)); managersByGroup.set(m.org_group_id,a); });
+  const memberIdsByGroup = new Map();
+  data.memberships.forEach(m=>{ const a=memberIdsByGroup.get(m.org_group_id)||[]; a.push(m.person_id); memberIdsByGroup.set(m.org_group_id,a); });
+  const tasksByPerson = new Map();
+  const taskById = new Map(data.tasks.map(t=>[t.id,t]));
+  data.assignments.forEach(a=>{ const t=taskById.get(a.task_id); if(!t)return; const arr=tasksByPerson.get(a.person_id)||[]; arr.push({title:t.title,status:t.status,isTopPriority:t.is_top_priority}); tasksByPerson.set(a.person_id,arr); });
+
+  const groupById = new Map(groups.map(g=>[g.id,g]));
+
+  // ---- detail cards ----
+  DETAILS = {};
+  people.forEach(p=>{
+    const roles = rolesByPerson.get(p.id)||[];
+    const teams = groups.filter(g=>(memberIdsByGroup.get(g.id)||[]).includes(p.id)).map(g=>g.name_ar);
+    const badge = p.classification==="owner"?"owner":p.classification==="freelancer"?"freelancer":"employee";
+    DETAILS[p.id] = {
+      name: p.nickname ? `${p.full_name_ar} «${p.nickname}»` : p.full_name_ar,
+      subtitle: roles.slice(0,2).join(" · ") || "—",
+      badge, badgeLabel: classificationLabel[p.classification],
+      team: teams.join(" / ") || "—",
+      manager: p.manager_id ? (byId(p.manager_id)?.full_name_ar ?? "—") : "—",
+      bullets: respByPerson.get(p.id)||[],
+      tasks: tasksByPerson.get(p.id)||[],
+    };
   });
-  // keep canvas in sync with container size (fixes offset renders after layout/resize)
-  requestAnimationFrame(()=>{ cy.resize(); if(allPos) cy.fit(50); });
-  window.addEventListener("resize", ()=>{ cy.resize(); });
-  cy.on("tap","node", ev=>{ if(!connectMode) openNode(ev.target); });
-  cy.on("tap","edge", ev=>{ if(canEdit() && !connectMode) confirmDeleteEdge(ev.target); });
-  cy.on("tap", ev=>{ if(ev.target===cy) closePanel(); });
-  cy.on("dragfree","node", ev=>{ if(canEdit()) savePos(ev.target); });
-  cy.on("dbltap","node", ev=>{ if(canEdit()) renameNode(ev.target); });
-  // custom drag-to-connect: press a box, drag to another, release → arrow
-  cy.on("tapstart","node", ev=>{ if(connectMode){ connSource=ev.target; connSource.select(); } });
-  cy.on("tapend", async ev=>{
-    if(!connectMode || !connSource) return;
-    const src=connSource; connSource=null;
-    const tgt=ev.target;
-    src.unselect();
-    if(tgt && tgt!==cy && tgt.isNode && tgt.isNode() && tgt.id()!==src.id()){
-      if(src.edgesTo(tgt).length){ hint("السهم موجود بالفعل"); return; }
-      await createConnection(src, tgt);
-    }
+  groups.forEach(g=>{
+    const typeLabel = g.group_type==="team"?"فريق":g.group_type==="function"?"وظيفة":"مجموعة";
+    DETAILS[g.slug] = {
+      name: g.name_ar, subtitle: g.description ?? "—", badge:"group", badgeLabel:typeLabel,
+      team: g.parent_group_id ? (groupById.get(g.parent_group_id)?.name_ar ?? "—") : "Teams",
+      manager: formatManagerList(managersByGroup.get(g.id)||[]) || "—",
+      bullets: [], emptyNote:"لم تُحدد التفاصيل بعد.",
+    };
   });
-  if(!allPos){
-    const l = cy.layout({ name:"dagre", rankDir:"TB", nodeSep:45, rankSep:70, animate:false });
-    l.one("layoutstop", ()=>{ cy.fit(50); if(canEdit()) saveAllPositions(); });
-    l.run();
-  } else { cy.fit(50); }
-}
+  DETAILS["teams"] = { name:"Teams", subtitle:"المظلة التي تضم الفرق الثلاثة", badge:"group", badgeLabel:"قسم رئيسي",
+    team:"—", manager:"—", bullets:[
+      "يتفرّع إلى ثلاثة فرق فقط: Management وMedia وSales.",
+      "Freelancers تصنيف عمل، وOperations وظيفة عابرة للفرق — وليسا فريقًا رابعًا." ] };
 
-async function createConnection(srcNode, tgtNode){
-  const src=parseNid(srcNode.id()), tgt=parseNid(tgtNode.id());
-  const { data, error } = await db.from("connections").insert({
-    source_kind:src.kind, source_id:src.id, target_kind:tgt.kind, target_id:tgt.id
-  }).select("id").single();
-  if(error){ hint("تعذّر إنشاء السهم: "+error.message); return; }
-  cy.add({ data:{ id:data.id, source:srcNode.id(), target:tgtNode.id() } });
-  hint("تم إنشاء السهم ✓");
-}
+  // ---- node builders ----
+  const pNode = (id, kind="person") => nodeHtml(byId(id)?.full_name_ar ?? "?", kind, id);
+  const gNode = (slug, kind="group") => { const g=groupBySlug.get(slug); return nodeHtml(g?.name_ar ?? slug, kind, slug); };
+  const mgmtMembers = (memberIdsByGroup.get(groupBySlug.get("management")?.id)||[]);
 
-async function saveAllPositions(){
-  const ups={person:[],group:[]};
-  cy.nodes().forEach(n=>{ const {kind,id}=parseNid(n.id()); const p=n.position(); ups[kind].push({id,pos_x:p.x,pos_y:p.y}); });
-  for(const row of ups.person) await db.from("people").update({pos_x:row.pos_x,pos_y:row.pos_y}).eq("id",row.id);
-  for(const row of ups.group) await db.from("org_groups").update({pos_x:row.pos_x,pos_y:row.pos_y}).eq("id",row.id);
-}
-async function savePos(node){
-  const {kind,id}=parseNid(node.id()); const p=node.position();
-  const t = kind==="person"?"people":"org_groups";
-  await db.from(t).update({pos_x:p.x,pos_y:p.y}).eq("id",id);
-}
+  const html = `
+  <div class="chart-wrap">
+    <div class="chart-head"><h1>خريطة الفريق</h1><p>اضغط على أي اسم أو مجموعة لعرض تفاصيلها بالأسفل</p></div>
+    <div class="trunk">${nodeHtml("علي — صاحب الشركة","owner",P.ali)}<div class="stem-arrow"></div>${nodeHtml("Teams","label","teams")}</div>
+    <div class="branches">
+      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>
+        <div class="row">${mgmtMembers.map(id=>pNode(id)).join("")}</div></div>
+      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>
+        ${pNode(P.ahmad)}<div class="stem-arrow"></div>${pNode(P.ahsan)}<div class="stem-arrow"></div>
+        <div class="row">${pNode(P.haitham)}${pNode(P.mohammed)}</div>
+        <div class="stem-arrow"></div>${gNode("freelance-editors")}</div>
+      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>
+        <div class="row">${pNode(P.sami)}${pNode(P.malek)}</div>
+        <div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
+        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div></div>
+    </div>
+    <div class="more-hint">علاقات عابرة للفرق بالأسفل</div>
+    <hr class="divider" />
+    <div class="cross-band">
+      <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Freelancers</div>
+        <div class="cross-wrap">${gNode("setters")}${gNode("closers")}${pNode(P.raafat)}${pNode(P.anas)}${gNode("freelance-editors")}</div></div>
+      <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Operations</div>
+        <div class="cross-wrap">${pNode(P.kamal)}${pNode(P.osama)}</div></div>
+      <div class="cross-col"><div class="cross-title">علاقة شخصية مباشرة</div>
+        <div class="pa-line">${pNode(P.ali)}<span class="arrow-ico">←</span>${pNode(P.kamal)}</div></div>
+    </div>
+    <div class="detail" id="detail"></div>
+  </div>`;
 
-/* ---------- add / rename / delete ---------- */
-async function addNodeFlow(kind){
-  const name=prompt(kind==="person"?"اسم الشخص:":"اسم القسم/المجموعة:"); if(!name||!name.trim())return;
-  const center=cy.extent(); const pos={x:(center.x1+center.x2)/2,y:(center.y1+center.y2)/2};
-  let rec;
-  if(kind==="person"){
-    const { data, error } = await db.from("people").insert({ full_name_ar:name.trim(), classification:"employee", pos_x:pos.x, pos_y:pos.y }).select("*").single();
-    if(error) return hint("خطأ: "+error.message); rec=data; DATA.personById.set(data.id,data); DATA.people.push(data);
-    cy.add({ data:{ id:nid("person",data.id), label:data.full_name_ar, kind:"person", cls:"person" }, classes:"person", position:pos });
-  } else {
-    const slug = name.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^\w\-]/g,"")||("g"+Date.now());
-    const { data, error } = await db.from("org_groups").insert({ name_ar:name.trim(), slug, group_type:"subgroup", pos_x:pos.x, pos_y:pos.y }).select("*").single();
-    if(error) return hint("خطأ: "+error.message); rec=data; DATA.groupById.set(data.id,data); DATA.groups.push(data);
-    cy.add({ data:{ id:nid("group",data.id), label:data.name_ar, kind:"group", cls:"group" }, classes:"group", position:pos });
-  }
-  hint("أُضيف — اسحب لرسم سهم للتوصيل");
-}
-async function renameNode(node){
-  if(!canEdit())return; const {kind,id}=parseNid(node.id());
-  const cur = kind==="person"? DATA.personById.get(id).full_name_ar : DATA.groupById.get(id).name_ar;
-  const name=prompt("الاسم الجديد:",cur); if(!name||!name.trim()||name===cur)return;
-  const t=kind==="person"?"people":"org_groups"; const col=kind==="person"?"full_name_ar":"name_ar";
-  const { error } = await db.from(t).update({[col]:name.trim()}).eq("id",id);
-  if(error) return hint("خطأ: "+error.message);
-  if(kind==="person") DATA.personById.get(id).full_name_ar=name.trim(); else DATA.groupById.get(id).name_ar=name.trim();
-  node.data("label", name.trim()); hint("تم التعديل");
-}
-async function deleteNode(node){
-  const {kind,id}=parseNid(node.id());
-  if(!confirm("حذف هذا العنصر وكل أسهمه؟"))return;
-  const t=kind==="person"?"people":"org_groups";
-  await db.from(t).update({deleted_at:new Date().toISOString()}).eq("id",id);
-  await db.from("connections").delete().or(`and(source_kind.eq.${kind},source_id.eq.${id}),and(target_kind.eq.${kind},target_id.eq.${id})`);
-  node.connectedEdges().remove(); node.remove(); closePanel(); hint("حُذف");
-}
-async function confirmDeleteEdge(edge){
-  if(!confirm("حذف هذا السهم؟"))return;
-  const { error } = await db.from("connections").delete().eq("id",edge.id());
-  if(error) return hint("خطأ: "+error.message); edge.remove(); hint("حُذف السهم");
-}
-
-/* ---------- detail panel ---------- */
-const panel=$("panel"), pbody=$("panelBody");
-function closePanel(){ panel.classList.remove("open"); cy&&cy.$(":selected").unselect(); }
-$("panelClose").onclick=closePanel;
-
-async function openNode(node){
-  node.select();
-  const {kind,id}=parseNid(node.id());
-  if(kind==="person") return openPerson(id);
-  return openGroup(id);
-}
-
-async function openPerson(id){
-  const p=DATA.personById.get(id); if(!p) return;
-  panel.classList.add("open"); pbody.innerHTML=`<p class="muted">جارٍ التحميل…</p>`;
-  const [pr,roles,resp,mem,groups,asg]=await Promise.all([
-    db.from("person_roles").select("role_id").eq("person_id",id).then(r=>r.data||[]),
-    db.from("roles").select("id,name_ar").then(r=>r.data||[]),
-    db.from("responsibilities").select("description_ar,display_order").eq("person_id",id).order("display_order").then(r=>r.data||[]),
-    db.from("person_org_group_memberships").select("org_group_id").eq("person_id",id).then(r=>r.data||[]),
-    db.from("org_groups").select("id,name_ar").is("deleted_at",null).then(r=>r.data||[]),
-    db.from("task_assignments").select("task_id").eq("person_id",id).then(r=>r.data||[]),
-  ]);
-  const roleName=new Map(roles.map(r=>[r.id,r.name_ar])); const gName=new Map(groups.map(g=>[g.id,g.name_ar]));
-  const myRoles=pr.map(x=>roleName.get(x.role_id)).filter(Boolean);
-  const myTeams=mem.map(x=>gName.get(x.org_group_id)).filter(Boolean);
-  let tasks=[];
-  const tids=asg.map(a=>a.task_id);
-  if(tids.length){ tasks=await db.from("tasks").select("id,title,status,is_top_priority").in("id",tids).is("deleted_at",null).then(r=>r.data||[]); }
-  const badge=p.classification==="owner"?["b-owner","Owner"]:p.classification==="freelancer"?["b-free","Freelancer"]:["b-emp","موظف"];
-  const mgr=p.manager_id?(DATA.personById.get(p.manager_id)?.full_name_ar||"—"):"—";
-  pbody.innerHTML=`
-    <span class="p-badge ${badge[0]}">${esc(badge[1])}</span>
-    <h2 class="p-name">${esc(p.full_name_ar)}${p.nickname?` «${esc(p.nickname)}»`:""}</h2>
-    <p class="p-sub">${esc(myRoles.slice(0,3).join(" · ")||"—")}</p>
-    <div class="p-stats"><div><b>الفريق:</b> ${esc(myTeams.join(" / ")||"—")}</div><div><b>المدير المباشر:</b> ${esc(mgr)}</div></div>
-    ${resp.length?`<div class="sec-t">المسؤوليات</div><ul class="plain">${resp.map(r=>`<li>${esc(r.description_ar)}</li>`).join("")}</ul>`:""}
-    <div class="sec-t">المهام${canEdit()?` <button class="btn btn-sm" id="pAddTask" style="float:inline-end">+ مهمة</button>`:""}</div>
-    <div id="taskList">${tasks.length?tasks.map(t=>taskRow(t)).join(""):`<p class="muted">لا توجد مهام.</p>`}</div>
-    ${canEdit()?`<div class="edit-actions">
-      <button class="btn btn-sm" id="pEdit">تعديل البيانات ↗</button>
-      <button class="btn btn-sm btn-danger" id="pDel">حذف</button></div>`:""}`;
-  pbody.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>openTask(b.dataset.task,id));
-  if(canEdit()){
-    $("pEdit").onclick=()=>{ location.href="./admin.html#/people/"+id; };
-    $("pDel").onclick=()=>deleteNode(cy.$("#"+CSS.escape(nid("person",id))));
-    $("pAddTask")&&($("pAddTask").onclick=()=>createTaskForPerson(id));
-  }
-}
-function taskRow(t){ return `<div class="trow"><button class="tlink" data-task="${t.id}">${esc(t.title)}</button>
-  <span class="pill ${t.is_top_priority?"pill-prio":""}">${esc(STATUS[t.status]||t.status)}</span></div>`; }
-
-async function createTaskForPerson(personId){
-  const title=prompt("اسم المهمة:"); if(!title||!title.trim())return;
-  const { data, error } = await db.from("tasks").insert({ title:title.trim(), status:"planned" }).select("id").single();
-  if(error) return hint("خطأ: "+error.message);
-  await db.from("task_assignments").insert({ task_id:data.id, person_id:personId });
-  openTask(data.id, personId);
-}
-
-async function openTask(taskId, backPersonId){
-  panel.classList.add("open"); pbody.innerHTML=`<p class="muted">جارٍ التحميل…</p>`;
-  const t=await db.from("tasks").select("*").eq("id",taskId).maybeSingle().then(r=>r.data);
-  if(!t){ pbody.innerHTML="<p class='muted'>المهمة غير موجودة.</p>"; return; }
-  const [asg,people,links,files]=await Promise.all([
-    db.from("task_assignments").select("person_id").eq("task_id",taskId).then(r=>r.data||[]),
-    db.from("people").select("id,full_name_ar").is("deleted_at",null).then(r=>r.data||[]),
-    db.from("links").select("*").eq("task_id",taskId).is("deleted_at",null).then(r=>r.data||[]),
-    db.from("files").select("*").eq("task_id",taskId).is("deleted_at",null).then(r=>r.data||[]),
-  ]);
-  const pName=new Map(people.map(p=>[p.id,p.full_name_ar]));
-  const assignees=asg.map(a=>pName.get(a.person_id)).filter(Boolean);
-  const statusOpts=Object.entries(STATUS).map(([v,l])=>`<option value="${v}" ${t.status===v?"selected":""}>${l}</option>`).join("");
-  pbody.innerHTML=`
-    <button class="btn btn-sm" id="tBack" style="margin-bottom:14px">→ رجوع</button>
-    <h2 class="p-name">${esc(t.title)}</h2>
-    <p class="p-sub">${esc(assignees.join("، ")||"بدون مسؤول")}</p>
-    ${t.description?`<p style="font-size:13.5px;line-height:1.6">${esc(t.description)}</p>`:""}
-    ${canEdit()?`<div class="field">الحالة<select id="tStatus">${statusOpts}</select></div>`:`<span class="pill ${t.is_top_priority?"pill-prio":""}">${esc(STATUS[t.status])}</span>`}
-    <div class="sec-t">الروابط والمستندات الخارجية</div>
-    <div id="linkList">${links.length?links.map(l=>docRow("link",l)).join(""):`<p class="muted">لا توجد روابط.</p>`}</div>
-    ${canEdit()?`<div class="addbar"><input id="lUrl" placeholder="https://..."><button class="btn btn-sm" id="lAdd">إضافة</button></div>`:""}
-    <div class="sec-t">الملفات (PDF / Word / صور — حتى 10 ميجابايت)</div>
-    <div id="fileList">${files.length?files.map(f=>docRow("file",f)).join(""):`<p class="muted">لا توجد ملفات.</p>`}</div>
-    ${canEdit()?`<div style="margin-top:8px"><input type="file" id="fUp"><span class="muted" id="fMsg"></span></div>`:""}`;
-  $("tBack").onclick=()=>{ if(backPersonId) openPerson(backPersonId); else closePanel(); };
-  wireDocs(taskId, backPersonId);
-  if(canEdit()){
-    $("tStatus")&&($("tStatus").onchange=async e=>{ await db.from("tasks").update({status:e.target.value}).eq("id",taskId); hint("حُدّثت الحالة"); });
-  }
-}
-function docRow(type,d){
-  if(type==="link") return `<div class="doc-row"><a href="${esc(d.url)}" target="_blank" rel="noopener">🔗 ${esc(d.label||d.url)}</a>${ME&&canEdit()?`<button class="icon-btn" data-dellink="${d.id}">🗑</button>`:""}</div>`;
-  return `<div class="doc-row"><a data-file="${esc(d.storage_path)}" data-name="${esc(d.original_filename)}">📄 ${esc(d.original_filename)}</a>${canEdit()?`<button class="icon-btn" data-delfile="${d.id}" data-path="${esc(d.storage_path)}">🗑</button>`:""}</div>`;
-}
-function wireDocs(taskId, backPersonId){
-  pbody.querySelectorAll("[data-file]").forEach(a=>a.onclick=async()=>{
-    const { data, error } = await db.storage.from("task-files").createSignedUrl(a.dataset.file, 120);
-    if(error||!data){ hint("تحميل الملفات يتطلب تسجيل الدخول"); return; }
-    window.open(data.signedUrl,"_blank");
+  document.getElementById("app").innerHTML = html;
+  document.querySelectorAll(".node").forEach(n=>{
+    if(!n.dataset.detail) return;
+    n.addEventListener("click", ()=>renderDetail(n.dataset.detail));
   });
-  if(!canEdit())return;
-  $("lAdd")&&($("lAdd").onclick=async()=>{
-    const url=$("lUrl").value.trim(); if(!url)return hint("أدخل رابطًا");
-    let type="other"; if(url.includes("drive.google"))type="drive"; else if(url.includes("notion."))type="notion";
-    const { error } = await db.from("links").insert({ task_id:taskId, url, link_type:type });
-    if(error) return hint("خطأ: "+error.message); openTask(taskId,backPersonId);
-  });
-  pbody.querySelectorAll("[data-dellink]").forEach(b=>b.onclick=async()=>{ await db.from("links").delete().eq("id",b.dataset.dellink); openTask(taskId,backPersonId); });
-  const up=$("fUp");
-  up&&(up.onchange=async()=>{
-    const f=up.files[0]; if(!f)return;
-    if(f.size>10*1024*1024) return hint("الملف أكبر من 10 ميجابايت");
-    $("fMsg").textContent="جارٍ الرفع…";
-    const path=`${taskId}/${crypto.randomUUID()}-${f.name}`;
-    const { error:ue } = await db.storage.from("task-files").upload(path,f);
-    if(ue){ $("fMsg").textContent=""; return hint("خطأ بالرفع: "+ue.message); }
-    const { error } = await db.from("files").insert({ task_id:taskId, storage_path:path, original_filename:f.name, mime_type:f.type||null, size_bytes:f.size });
-    if(error) return hint("خطأ: "+error.message); openTask(taskId,backPersonId);
-  });
-  pbody.querySelectorAll("[data-delfile]").forEach(b=>b.onclick=async()=>{
-    await db.storage.from("task-files").remove([b.dataset.path]);
-    await db.from("files").delete().eq("id",b.dataset.delfile); openTask(taskId,backPersonId);
-  });
+  renderDetail(DEFAULT_ID);
 }
 
-async function openGroup(id){
-  const g=DATA.groupById.get(id); if(!g)return;
-  panel.classList.add("open"); pbody.innerHTML=`<p class="muted">جارٍ التحميل…</p>`;
-  const mgrs=await db.from("org_group_managers").select("person_id,display_order").eq("org_group_id",id).order("display_order").then(r=>r.data||[]);
-  const names=mgrs.map(m=>DATA.personById.get(m.person_id)?.full_name_ar).filter(Boolean);
-  const disp=names.length?names[0]+names.slice(1).map(n=>" و"+n).join(""):"—";
-  pbody.innerHTML=`
-    <span class="p-badge b-grp">${esc(GTYPE[g.group_type])}</span>
-    <h2 class="p-name">${esc(g.name_ar)}</h2>
-    <p class="p-sub">${esc(g.description||"—")}</p>
-    <div class="p-stats"><div><b>الإدارة:</b> ${esc(disp)}</div></div>
-    ${canEdit()?`<div class="edit-actions"><button class="btn btn-sm" id="gEdit">تعديل ↗</button>
-      <button class="btn btn-sm btn-danger" id="gDel">حذف</button></div>`:""}`;
-  if(canEdit()){
-    $("gEdit").onclick=()=>{ location.href="./admin.html#/teams/"+id; };
-    $("gDel").onclick=()=>deleteNode(cy.$("#"+CSS.escape(nid("group",id))));
-  }
-}
-
-/* ---------- toolbar / auth ---------- */
-$("fitBtn").onclick=()=>{ if(cy){ cy.resize(); cy.animate({fit:{padding:50}},{duration:250}); } };
-$("addPerson")&&($("addPerson").onclick=()=>addNodeFlow("person"));
-$("addDept")&&($("addDept").onclick=()=>addNodeFlow("group"));
-$("connectBtn")&&($("connectBtn").onclick=()=>{
-  connectMode=!connectMode; connSource=null;
-  $("connectBtn").classList.toggle("btn-on",connectMode);
-  if(cy) cy.autoungrabify(connectMode ? true : !canEdit());
-  hint(connectMode ? "اسحب من صندوق إلى آخر لرسم سهم (اضغط الزر لإيقاف التوصيل)" : "أُوقف وضع التوصيل", 3200);
-});
-function applyMode(){
-  const editing = canEdit();
-  $("editTools").style.display = editing?"inline-flex":"none";
-  $("authBtn").textContent = ME? "خروج" : "دخول للتعديل";
-  $("who").textContent = ME? (ME.email+" · "+(ME.role==="admin"?"مدير":ME.role==="editor"?"محرر":"مشاهد")) : "";
-  if(cy){
-    if(!editing && connectMode){ connectMode=false; $("connectBtn")&&$("connectBtn").classList.remove("btn-on"); }
-    cy.autoungrabify(connectMode ? true : !editing);
-  }
-}
-$("authBtn").onclick=async()=>{
-  if(ME){ await db.auth.signOut(); location.reload(); }
-  else $("loginModal").classList.add("open");
-};
-$("loginCancel").onclick=()=>$("loginModal").classList.remove("open");
-$("loginGo").onclick=async()=>{
-  $("lerr").textContent="";
-  const { error } = await db.auth.signInWithPassword({ email:$("lemail").value.trim(), password:$("lpw").value });
-  if(error){ $("lerr").textContent="تعذّر الدخول. تحقق من البيانات."; return; }
-  location.reload();
-};
-$("lpw")&&$("lpw").addEventListener("keydown",e=>{ if(e.key==="Enter")$("loginGo").click(); });
-window.addEventListener("keydown",e=>{ if((e.key==="Delete"||e.key==="Backspace")&&canEdit()&&cy){ const s=cy.$("node:selected"); if(s.length){ e.preventDefault(); deleteNode(s[0]); } } });
-
-/* ---------- boot ---------- */
 (async function(){
-  try{
-    await loadMe();           // polls until session restores (or instant for anon)
-    await fetchAll();
-    $("loading").style.display="none";
-    initCy();
-    applyMode();
-  }catch(e){ $("loading").textContent="تعذّر التحميل: "+e.message; }
+  try {
+    const [people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks] = await Promise.all([
+      sb("people?deleted_at=is.null&select=*"),
+      sb("org_groups?deleted_at=is.null&select=*"),
+      sb("org_group_managers?select=*&order=display_order"),
+      sb("person_org_group_memberships?select=*"),
+      sb("roles?select=*"),
+      sb("person_roles?select=*"),
+      sb("responsibilities?select=person_id,description_ar,display_order&order=display_order"),
+      sb("task_assignments?select=*"),
+      sb("tasks?deleted_at=is.null&select=id,title,status,is_top_priority"),
+    ]);
+    build({people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks});
+  } catch(e){
+    document.getElementById("app").innerHTML = `<div class="state err">تعذّر تحميل البيانات.<br>${esc(e.message)}</div>`;
+  }
 })();
 </script>
 </body>
