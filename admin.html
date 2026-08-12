@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>لوحة الإدارة — خريطة الفريق</title>
+<style>
+  :root{
+    --background:#ffffff;--surface:#f6f6f8;--foreground:#17171a;--muted:#6b6b74;--faint:#9a9aa2;
+    --border:#e3e3e7;--border-strong:#d4d4d9;--accent:#2554eb;--accent-text:#fff;
+    --badge-employee-bg:#e0e9ff;--badge-employee-text:#1d3fc9;--danger:#dc2626;
+    --badge-group-bg:#e7e7ea;--badge-group-text:#55555c;--badge-freelancer-bg:#fdecd2;--badge-freelancer-text:#8a5a12;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --background:#0c0c0e;--surface:#16161a;--foreground:#f2f2f4;--muted:#9d9da6;--faint:#6d6d76;
+    --border:#27272c;--border-strong:#34343a;--accent:#4d79ff;
+    --badge-employee-bg:rgba(77,121,255,.16);--badge-employee-text:#9db4ff;
+    --badge-group-bg:#202024;--badge-group-text:#b5b5bd;--badge-freelancer-bg:rgba(232,166,58,.16);--badge-freelancer-text:#e8b45c;
+  }}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--background);color:var(--foreground);
+    font-family:"SF Arabic","Segoe UI Arabic","Noto Sans Arabic",Tahoma,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  /* auth */
+  .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .auth-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:18px;padding:32px 28px}
+  .auth-title{font-size:22px;font-weight:800;margin:0 0 4px}
+  .auth-sub{margin:0 0 24px;color:var(--muted);font-size:13.5px}
+  .field{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted);margin-bottom:16px}
+  .field input,.field select,.field textarea{padding:10px 12px;border-radius:10px;border:1px solid var(--border-strong);
+    background:var(--background);color:var(--foreground);font-size:14px;font-family:inherit}
+  .field textarea{min-height:80px;resize:vertical}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  .err{color:var(--danger);font-size:13px;margin:0 0 12px;min-height:1px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:10px;border:1px solid var(--border-strong);
+    background:var(--background);color:var(--foreground);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;text-decoration:none}
+  .btn:hover{border-color:var(--accent)}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .btn-danger{color:var(--danger);border-color:var(--danger)}
+  .btn:disabled{opacity:.55;cursor:default}
+  .btn-block{width:100%;justify-content:center;padding:11px}
+  /* shell */
+  .shell{max-width:1080px;margin:0 auto;padding:24px 20px 80px}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+  .top h1{font-size:20px;font-weight:800;margin:0}
+  .top .who{font-size:12.5px;color:var(--muted)}
+  .top .who b{color:var(--foreground)}
+  .nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:26px}
+  .nav a{padding:7px 14px;border-radius:9px;font-size:13px;font-weight:600;text-decoration:none;color:var(--muted);border:1px solid var(--border);cursor:pointer}
+  .nav a:hover{color:var(--accent);border-color:var(--accent)}
+  .nav a.active{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  .row-actions{display:flex;gap:8px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{text-align:right;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+  th{color:var(--muted);font-weight:700;font-size:12px}
+  tr:hover td{background:var(--surface)}
+  .form-grid{display:flex;flex-direction:column;gap:14px;max-width:600px}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:var(--background);
+    border:1px solid var(--border-strong);font-size:13px;font-weight:600}
+  .chip button{border:none;background:transparent;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;padding:0 2px}
+  .chip button:hover{color:var(--danger)}
+  .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;background:var(--badge-group-bg);color:var(--badge-group-text);white-space:nowrap}
+  .pill-priority{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text)}
+  .muted{color:var(--muted);font-size:13px}
+  .section-h{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 16px}
+  .section-h h2{font-size:16px;font-weight:800;margin:0}
+  .notice{padding:12px 14px;border-radius:10px;font-size:13px;margin-bottom:18px;background:var(--badge-employee-bg);color:var(--badge-employee-text)}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--foreground);color:var(--background);
+    padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;opacity:0;transition:opacity .2s;pointer-events:none;z-index:50}
+  .toast.show{opacity:1}
+  .back{font-size:13px;color:var(--muted);text-decoration:none;cursor:pointer;display:inline-flex;margin-bottom:16px}
+  .back:hover{color:var(--accent)}
+  .inline-add{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+  .inline-add .field{flex:1;min-width:150px;margin-bottom:0}
+  .center{min-height:60vh;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .multiselect{display:flex;flex-wrap:wrap;gap:6px}
+  .opt{padding:5px 10px;border-radius:999px;border:1px solid var(--border-strong);font-size:12.5px;cursor:pointer;user-select:none}
+  .opt.on{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+  @media (max-width:640px){.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div id="root"><div class="center">جارٍ التحميل…</div></div>
+<div class="toast" id="toast"></div>
+
+<script src="./supabase.js"></script>
+<script>
+const SUPA_URL = "https://wkmzxshebhkboliqsbib.supabase.co";
+const SUPA_KEY = "sb_publishable_BuV9pAaraK7vLz1AtEn8zg_L97wdZFW";
+const db = supabase.createClient(SUPA_URL, SUPA_KEY, { auth:{ persistSession:true, autoRefreshToken:true } });
+
+const CLASS = { owner:"Owner", employee:"موظف", freelancer:"Freelancer", not_yet_defined:"غير محدد" };
+const STATUS = { not_yet_defined:"غير محددة", planned:"مخطط", in_progress:"قيد التنفيذ", done:"منجزة" };
+const GTYPE = { team:"فريق", function:"وظيفة", subgroup:"مجموعة فرعية" };
+
+let ME = null; // { id, email, role }
+const $ = (id)=>document.getElementById(id);
+const esc = (s)=>String(s??"").replace(/[&<>"']/g,c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function toast(m){ const t=$("toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2200); }
+function canEdit(){ return ME && (ME.role==="admin"||ME.role==="editor"); }
+
+async function loadMe(){
+  const { data:{ session } } = await db.auth.getSession();
+  if(!session){ ME=null; return; }
+  const { data } = await db.from("app_users").select("id,email,app_role,is_disabled").eq("id", session.user.id).maybeSingle();
+  if(!data || data.is_disabled){ ME=null; return; }
+  ME = { id:data.id, email:data.email, role:data.app_role };
+}
+
+/* ---------------- auth screen ---------------- */
+function renderLogin(msg){
+  $("root").innerHTML = `
+    <div class="auth-page"><div class="auth-card">
+      <h1 class="auth-title">تسجيل الدخول</h1>
+      <p class="auth-sub">لوحة إدارة خريطة الفريق</p>
+      <p class="err" id="lerr">${esc(msg||"")}</p>
+      <div class="field">البريد الإلكتروني<input id="email" type="email" autocomplete="username" /></div>
+      <div class="field">كلمة المرور<input id="pw" type="password" autocomplete="current-password" /></div>
+      <button class="btn btn-primary btn-block" id="loginBtn">دخول</button>
+      <a class="back" href="./" style="margin-top:20px">← العودة إلى الخريطة</a>
+    </div></div>`;
+  const go = async ()=>{
+    const btn=$("loginBtn"); btn.disabled=true; $("lerr").textContent="";
+    const { error } = await db.auth.signInWithPassword({ email:$("email").value.trim(), password:$("pw").value });
+    if(error){ $("lerr").textContent = "تعذّر الدخول: تأكد من البريد وكلمة المرور."; btn.disabled=false; return; }
+    await loadMe();
+    if(!ME){ $("lerr").textContent="هذا الحساب غير مفعّل أو غير مصرح له."; await db.auth.signOut(); btn.disabled=false; return; }
+    location.hash = "#/"; renderApp();
+  };
+  $("loginBtn").onclick = go;
+  $("pw").addEventListener("keydown", e=>{ if(e.key==="Enter") go(); });
+}
+
+/* ---------------- app shell ---------------- */
+const TABS = [
+  ["#/","الرئيسية"], ["#/people","الأشخاص"], ["#/teams","الفرق والمجموعات"],
+  ["#/tasks","المهام"], ["#/categories","التصنيفات"], ["#/roles","المسميات"], ["#/users","المستخدمون"],
+];
+function shell(inner){
+  const roleLabel = ME.role==="admin"?"مدير":ME.role==="editor"?"محرر":"مشاهد";
+  const hash = location.hash || "#/";
+  const nav = TABS.filter(([h])=> h!=="#/users" || ME.role==="admin")
+    .map(([h,l])=>`<a href="${h}" class="${hash===h||(h!=="#/"&&hash.startsWith(h))?"active":""}">${l}</a>`).join("");
+  return `<div class="shell">
+    <div class="top">
+      <h1>لوحة الإدارة</h1>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="who"><b>${esc(ME.email)}</b> · ${roleLabel}</span>
+        <a class="btn" href="./">الخريطة</a>
+        <button class="btn" id="logoutBtn">خروج</button>
+      </div>
+    </div>
+    <div class="nav">${nav}</div>
+    ${!canEdit() ? `<p class="notice">حسابك للمشاهدة فقط. تواصل مع المدير لمنحك صلاحية التعديل.</p>` : ""}
+    <div id="view">${inner}</div>
+  </div>`;
+}
+function mountShell(inner){
+  $("root").innerHTML = shell(inner);
+  $("logoutBtn").onclick = async ()=>{ await db.auth.signOut(); ME=null; location.hash="#/"; renderLogin(); };
+}
+
+/* ---------------- data helpers ---------------- */
+const all = (t, q="")=> db.from(t).select("*"+(q?"":"")).then(r=>r.data||[]);
+async function fetchLookups(){
+  const [people, groups, roles, categories] = await Promise.all([
+    db.from("people").select("*").is("deleted_at",null).then(r=>r.data||[]),
+    db.from("org_groups").select("*").is("deleted_at",null).then(r=>r.data||[]),
+    db.from("roles").select("*").then(r=>r.data||[]),
+    db.from("categories").select("*").then(r=>r.data||[]),
+  ]);
+  return { people, groups, roles, categories };
+}
+function opt(v,label,sel){ return `<option value="${esc(v)}" ${sel===v?"selected":""}>${esc(label)}</option>`; }
+
+/* ---------------- Categories ---------------- */
+async function viewCategories(){
+  const rows = await db.from("categories").select("*").order("name_ar").then(r=>r.data||[]);
+  const list = rows.map(c=>`<tr>
+    <td>${esc(c.name_ar)}</td><td class="muted">${esc(c.name_en||"—")}</td><td class="muted">${esc(c.description||"—")}</td>
+    <td class="row-actions">${canEdit()?`<button class="btn btn-danger" data-del="${c.id}">حذف</button>`:""}</td></tr>`).join("");
+  mountShell(`<div class="section-h"><h2>التصنيفات</h2></div>
+    ${canEdit()?`<div class="inline-add">
+      <div class="field">الاسم بالعربية<input id="c_ar"></div>
+      <div class="field">English<input id="c_en"></div>
+      <div class="field">وصف<input id="c_desc"></div>
+      <button class="btn btn-primary" id="c_add">+ إضافة</button></div>`:""}
+    <div class="card"><table><thead><tr><th>الاسم</th><th>English</th><th>وصف</th><th></th></tr></thead><tbody>${list||`<tr><td colspan="4" class="muted">لا توجد تصنيفات.</td></tr>`}</tbody></table></div>`);
+  wireList("categories");
+  if(canEdit()) $("c_add").onclick = async ()=>{
+    const name_ar=$("c_ar").value.trim(); if(!name_ar) return toast("الاسم مطلوب");
+    const { error } = await db.from("categories").insert({ name_ar, name_en:$("c_en").value.trim()||null, description:$("c_desc").value.trim()||null });
+    if(error) return toast("خطأ: "+error.message); toast("أُضيف"); viewCategories();
+  };
+}
+
+/* ---------------- Roles ---------------- */
+async function viewRoles(){
+  const rows = await db.from("roles").select("*").order("name_ar").then(r=>r.data||[]);
+  const list = rows.map(c=>`<tr><td>${esc(c.name_ar)}</td><td class="muted">${esc(c.name_en||"—")}</td>
+    <td class="row-actions">${canEdit()?`<button class="btn btn-danger" data-del="${c.id}">حذف</button>`:""}</td></tr>`).join("");
+  mountShell(`<div class="section-h"><h2>المسميات الوظيفية</h2></div>
+    ${canEdit()?`<div class="inline-add">
+      <div class="field">الاسم بالعربية<input id="r_ar"></div>
+      <div class="field">English<input id="r_en"></div>
+      <button class="btn btn-primary" id="r_add">+ إضافة</button></div>`:""}
+    <div class="card"><table><thead><tr><th>الاسم</th><th>English</th><th></th></tr></thead><tbody>${list||`<tr><td colspan="3" class="muted">لا توجد مسميات.</td></tr>`}</tbody></table></div>`);
+  wireList("roles");
+  if(canEdit()) $("r_add").onclick = async ()=>{
+    const name_ar=$("r_ar").value.trim(); if(!name_ar) return toast("الاسم مطلوب");
+    const { error } = await db.from("roles").insert({ name_ar, name_en:$("r_en").value.trim()||null });
+    if(error) return toast("خطأ: "+error.message); toast("أُضيف"); viewRoles();
+  };
+}
+
+function wireList(table){
+  document.querySelectorAll("[data-del]").forEach(b=> b.onclick = async ()=>{
+    if(!confirm("تأكيد الحذف؟")) return;
+    const { error } = await db.from(table).delete().eq("id", b.dataset.del);
+    if(error) return toast("خطأ: "+error.message); toast("حُذف"); router();
+  });
+}
+
+/* ---------------- People ---------------- */
+async function viewPeople(){
+  const { people, groups } = await fetchLookups();
+  const nameById = new Map(people.map(p=>[p.id,p.full_name_ar]));
+  const list = people.sort((a,b)=>a.full_name_ar.localeCompare(b.full_name_ar,"ar")).map(p=>`<tr>
+    <td>${esc(p.full_name_ar)}${p.nickname?` <span class="muted">«${esc(p.nickname)}»</span>`:""}</td>
+    <td><span class="pill">${esc(CLASS[p.classification])}</span></td>
+    <td class="muted">${esc(p.manager_id?nameById.get(p.manager_id)||"—":"—")}</td>
+    <td class="row-actions"><a class="btn" href="#/people/${p.id}">تعديل</a>
+      ${canEdit()?`<button class="btn btn-danger" data-delp="${p.id}">حذف</button>`:""}</td></tr>`).join("");
+  mountShell(`<div class="section-h"><h2>الأشخاص</h2>${canEdit()?`<a class="btn btn-primary" href="#/people/new">+ شخص جديد</a>`:""}</div>
+    <div class="card"><table><thead><tr><th>الاسم</th><th>التصنيف</th><th>المدير المباشر</th><th></th></tr></thead>
+    <tbody>${list||`<tr><td colspan="4" class="muted">لا يوجد أشخاص.</td></tr>`}</tbody></table></div>`);
+  document.querySelectorAll("[data-delp]").forEach(b=> b.onclick = async ()=>{
+    if(!confirm("حذف هذا الشخص؟")) return;
+    const { error } = await db.from("people").update({ deleted_at:new Date().toISOString() }).eq("id", b.dataset.delp);
+    if(error) return toast("خطأ: "+error.message); toast("حُذف"); viewPeople();
+  });
+}
+
+async function viewPersonForm(id){
+  const isNew = id==="new";
+  const { people, groups, roles } = await fetchLookups();
+  let person = { full_name_ar:"", full_name_en:"", nickname:"", classification:"employee", manager_id:"" };
+  let myRoleIds = new Set(), myTeamIds = new Set(), resp = [];
+  if(!isNew){
+    person = people.find(p=>p.id===id) || person;
+    const [pr, mem, rs] = await Promise.all([
+      db.from("person_roles").select("role_id").eq("person_id",id).then(r=>r.data||[]),
+      db.from("person_org_group_memberships").select("org_group_id").eq("person_id",id).then(r=>r.data||[]),
+      db.from("responsibilities").select("id,description_ar,display_order").eq("person_id",id).order("display_order").then(r=>r.data||[]),
+    ]);
+    myRoleIds = new Set(pr.map(x=>x.role_id)); myTeamIds = new Set(mem.map(x=>x.org_group_id)); resp = rs;
+  }
+  const mgrOpts = `<option value="">— بدون —</option>` + people.filter(p=>p.id!==id).map(p=>opt(p.id,p.full_name_ar,person.manager_id||"")).join("");
+  const classOpts = Object.entries(CLASS).map(([v,l])=>opt(v,l,person.classification)).join("");
+  const roleChips = roles.map(r=>`<span class="opt ${myRoleIds.has(r.id)?"on":""}" data-role="${r.id}">${esc(r.name_ar)}</span>`).join("");
+  const teamChips = groups.map(g=>`<span class="opt ${myTeamIds.has(g.id)?"on":""}" data-team="${g.id}">${esc(g.name_ar)}</span>`).join("");
+  const respList = resp.map((r,i)=>`<span class="chip" data-resp="${r.id}">${esc(r.description_ar)}<button data-delresp="${r.id}">×</button></span>`).join("");
+  mountShell(`<a class="back" href="#/people">← كل الأشخاص</a>
+    <div class="section-h"><h2>${isNew?"شخص جديد":esc(person.full_name_ar)}</h2></div>
+    <div class="card"><div class="form-grid">
+      <div class="two-col">
+        <div class="field">الاسم بالعربية<input id="p_ar" value="${esc(person.full_name_ar)}"></div>
+        <div class="field">English<input id="p_en" value="${esc(person.full_name_en||"")}"></div>
+      </div>
+      <div class="two-col">
+        <div class="field">اللقب (اختياري)<input id="p_nick" value="${esc(person.nickname||"")}"></div>
+        <div class="field">التصنيف<select id="p_class">${classOpts}</select></div>
+      </div>
+      <div class="field">المدير المباشر<select id="p_mgr">${mgrOpts}</select></div>
+      <div class="field">المسميات الوظيفية<div class="multiselect" id="p_roles">${roleChips||'<span class="muted">لا توجد مسميات — أضِفها من تبويب المسميات</span>'}</div></div>
+      <div class="field">الفرق / المجموعات<div class="multiselect" id="p_teams">${teamChips||'<span class="muted">لا توجد مجموعات</span>'}</div></div>
+      ${!isNew?`<div class="field">المسؤوليات
+        <div class="chips" id="p_resp">${respList||'<span class="muted">لا توجد</span>'}</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><input id="p_newresp" placeholder="أضف مسؤولية" style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--background);color:var(--foreground)"><button class="btn" id="p_addresp">إضافة</button></div>
+      </div>`:""}
+      <div class="row-actions"><button class="btn btn-primary" id="p_save">حفظ</button></div>
+    </div></div>`);
+  if(!canEdit()){ document.querySelectorAll("#view input,#view select,#view .opt,#view button").forEach(e=>{ if(e.id!=="logoutBtn") e.disabled=true, e.style.pointerEvents="none"; }); return; }
+  document.querySelectorAll("#p_roles .opt, #p_teams .opt").forEach(o=> o.onclick=()=>o.classList.toggle("on"));
+  if(!isNew){
+    $("p_addresp").onclick = async ()=>{
+      const v=$("p_newresp").value.trim(); if(!v) return;
+      const { error } = await db.from("responsibilities").insert({ person_id:id, description_ar:v, display_order:resp.length });
+      if(error) return toast("خطأ: "+error.message); viewPersonForm(id);
+    };
+    document.querySelectorAll("[data-delresp]").forEach(b=> b.onclick = async ()=>{
+      await db.from("responsibilities").delete().eq("id", b.dataset.delresp); viewPersonForm(id);
+    });
+  }
+  $("p_save").onclick = async ()=>{
+    const payload = { full_name_ar:$("p_ar").value.trim(), full_name_en:$("p_en").value.trim()||null,
+      nickname:$("p_nick").value.trim()||null, classification:$("p_class").value, manager_id:$("p_mgr").value||null };
+    if(!payload.full_name_ar) return toast("الاسم مطلوب");
+    let personId = id;
+    if(isNew){ const { data, error } = await db.from("people").insert(payload).select("id").single();
+      if(error) return toast("خطأ: "+error.message); personId = data.id; }
+    else { const { error } = await db.from("people").update(payload).eq("id",id); if(error) return toast("خطأ: "+error.message); }
+    // sync roles + teams (delete-all then insert selected)
+    const selRoles = [...document.querySelectorAll('#p_roles .opt.on')].map(o=>o.dataset.role);
+    const selTeams = [...document.querySelectorAll('#p_teams .opt.on')].map(o=>o.dataset.team);
+    await db.from("person_roles").delete().eq("person_id",personId);
+    if(selRoles.length) await db.from("person_roles").insert(selRoles.map(role_id=>({person_id:personId,role_id})));
+    await db.from("person_org_group_memberships").delete().eq("person_id",personId);
+    if(selTeams.length) await db.from("person_org_group_memberships").insert(selTeams.map(org_group_id=>({person_id:personId,org_group_id})));
+    toast("حُفظ"); location.hash="#/people";
+  };
+}
+
+/* ---------------- Teams / org_groups ---------------- */
+async function viewTeams(){
+  const { groups, people } = await fetchLookups();
+  const managers = await db.from("org_group_managers").select("*").order("display_order").then(r=>r.data||[]);
+  const nameById = new Map(people.map(p=>[p.id,p.full_name_ar]));
+  const mgrDisplay = (gid)=>{ const names = managers.filter(m=>m.org_group_id===gid).sort((a,b)=>a.display_order-b.display_order).map(m=>nameById.get(m.person_id)).filter(Boolean);
+    return names.length? names[0]+names.slice(1).map(n=>" و"+n).join("") : "—"; };
+  const list = groups.sort((a,b)=>a.name_ar.localeCompare(b.name_ar,"ar")).map(g=>`<tr>
+    <td>${esc(g.name_ar)}</td><td><span class="pill">${esc(GTYPE[g.group_type])}</span></td>
+    <td class="muted">${esc(mgrDisplay(g.id))}</td>
+    <td class="row-actions"><a class="btn" href="#/teams/${g.id}">تعديل</a>
+    ${canEdit()?`<button class="btn btn-danger" data-delg="${g.id}">حذف</button>`:""}</td></tr>`).join("");
+  mountShell(`<div class="section-h"><h2>الفرق والمجموعات</h2>${canEdit()?`<a class="btn btn-primary" href="#/teams/new">+ مجموعة جديدة</a>`:""}</div>
+    <div class="card"><table><thead><tr><th>الاسم</th><th>النوع</th><th>الإدارة</th><th></th></tr></thead>
+    <tbody>${list||`<tr><td colspan="4" class="muted">لا توجد.</td></tr>`}</tbody></table></div>`);
+  document.querySelectorAll("[data-delg]").forEach(b=> b.onclick = async ()=>{
+    if(!confirm("حذف هذه المجموعة؟")) return;
+    const { error } = await db.from("org_groups").update({ deleted_at:new Date().toISOString() }).eq("id",b.dataset.delg);
+    if(error) return toast("خطأ: "+error.message); toast("حُذف"); viewTeams();
+  });
+}
+
+async function viewTeamForm(id){
+  const isNew = id==="new";
+  const { groups, people } = await fetchLookups();
+  let g = { name_ar:"", name_en:"", slug:"", group_type:"subgroup", parent_group_id:"", description:"" };
+  let mgrs = []; // [{person_id, display_order}]
+  if(!isNew){
+    g = groups.find(x=>x.id===id) || g;
+    mgrs = await db.from("org_group_managers").select("*").eq("org_group_id",id).order("display_order").then(r=>r.data||[]);
+  }
+  const nameById = new Map(people.map(p=>[p.id,p.full_name_ar]));
+  const typeOpts = Object.entries(GTYPE).map(([v,l])=>opt(v,l,g.group_type)).join("");
+  const parentOpts = `<option value="">— بدون —</option>`+groups.filter(x=>x.id!==id).map(x=>opt(x.id,x.name_ar,g.parent_group_id||"")).join("");
+  const mgrChips = mgrs.map(m=>`<span class="chip" data-mgr="${m.person_id}">${esc(nameById.get(m.person_id)||"?")}<button data-delmgr="${m.person_id}">×</button></span>`).join("");
+  const preview = (()=>{ const names=mgrs.map(m=>nameById.get(m.person_id)).filter(Boolean); return names.length?names[0]+names.slice(1).map(n=>" و"+n).join(""):"—"; })();
+  const addMgrOpts = `<option value="">— اختر شخصًا لإضافته —</option>`+people.filter(p=>!mgrs.some(m=>m.person_id===p.id)).map(p=>opt(p.id,p.full_name_ar)).join("");
+  mountShell(`<a class="back" href="#/teams">← كل المجموعات</a>
+    <div class="section-h"><h2>${isNew?"مجموعة جديدة":esc(g.name_ar)}</h2></div>
+    <div class="card"><div class="form-grid">
+      <div class="two-col"><div class="field">الاسم بالعربية<input id="g_ar" value="${esc(g.name_ar)}"></div>
+        <div class="field">English<input id="g_en" value="${esc(g.name_en||"")}"></div></div>
+      <div class="two-col"><div class="field">المعرّف (slug)<input id="g_slug" value="${esc(g.slug)}" placeholder="مثال: media"></div>
+        <div class="field">النوع<select id="g_type">${typeOpts}</select></div></div>
+      <div class="field">المجموعة الأم<select id="g_parent">${parentOpts}</select></div>
+      <div class="field">الوصف<textarea id="g_desc">${esc(g.description||"")}</textarea></div>
+      ${!isNew?`<div class="field">الإدارة (المديرون بالترتيب) — تُعرض: <b>${esc(preview)}</b>
+        <div class="chips" id="g_mgrs" style="margin-top:8px">${mgrChips||'<span class="muted">لا أحد</span>'}</div>
+        <div style="display:flex;gap:8px;margin-top:8px"><select id="g_addmgr" style="flex:1">${addMgrOpts}</select><button class="btn" id="g_addmgrbtn">إضافة مدير</button></div></div>`
+      :`<p class="muted">احفظ المجموعة أولًا ثم أضِف المديرين.</p>`}
+      <div class="row-actions"><button class="btn btn-primary" id="g_save">حفظ</button></div>
+    </div></div>`);
+  if(!canEdit()){ document.querySelectorAll("#view input,#view select,#view textarea,#view button").forEach(e=>{ if(e.id!=="logoutBtn") e.disabled=true; }); return; }
+  if(!isNew){
+    $("g_addmgrbtn").onclick = async ()=>{
+      const pid=$("g_addmgr").value; if(!pid) return;
+      const { error } = await db.from("org_group_managers").insert({ org_group_id:id, person_id:pid, display_order:mgrs.length });
+      if(error) return toast("خطأ: "+error.message); viewTeamForm(id);
+    };
+    document.querySelectorAll("[data-delmgr]").forEach(b=> b.onclick = async ()=>{
+      await db.from("org_group_managers").delete().eq("org_group_id",id).eq("person_id",b.dataset.delmgr); viewTeamForm(id);
+    });
+  }
+  $("g_save").onclick = async ()=>{
+    const payload = { name_ar:$("g_ar").value.trim(), name_en:$("g_en").value.trim()||null, slug:$("g_slug").value.trim(),
+      group_type:$("g_type").value, parent_group_id:$("g_parent").value||null, description:$("g_desc").value.trim()||null };
+    if(!payload.name_ar||!payload.slug) return toast("الاسم والمعرّف مطلوبان");
+    if(isNew){ const { data, error } = await db.from("org_groups").insert(payload).select("id").single();
+      if(error) return toast("خطأ: "+error.message); toast("حُفظت — أضِف المديرين الآن"); location.hash="#/teams/"+data.id; }
+    else { const { error } = await db.from("org_groups").update(payload).eq("id",id); if(error) return toast("خطأ: "+error.message); toast("حُفظ"); location.hash="#/teams"; }
+  };
+}
+
+/* ---------------- Tasks ---------------- */
+async function viewTasks(){
+  const tasks = await db.from("tasks").select("*").is("deleted_at",null).order("created_at",{ascending:false}).then(r=>r.data||[]);
+  const { groups } = await fetchLookups();
+  const gName = new Map(groups.map(g=>[g.id,g.name_ar]));
+  const list = tasks.map(t=>`<tr>
+    <td><a href="#/tasks/${t.id}">${esc(t.title)}</a>${t.is_top_priority?` <span class="pill pill-priority">أولوية</span>`:""}</td>
+    <td><span class="pill">${esc(STATUS[t.status])}</span></td>
+    <td class="muted">${esc(t.org_group_id?gName.get(t.org_group_id)||"—":"—")}</td>
+    <td class="row-actions"><a class="btn" href="#/tasks/${t.id}">فتح</a>
+    ${canEdit()?`<button class="btn btn-danger" data-delt="${t.id}">حذف</button>`:""}</td></tr>`).join("");
+  mountShell(`<div class="section-h"><h2>المهام</h2>${canEdit()?`<a class="btn btn-primary" href="#/tasks/new">+ مهمة جديدة</a>`:""}</div>
+    <div class="card"><table><thead><tr><th>المهمة</th><th>الحالة</th><th>الفريق</th><th></th></tr></thead>
+    <tbody>${list||`<tr><td colspan="4" class="muted">لا توجد مهام.</td></tr>`}</tbody></table></div>`);
+  document.querySelectorAll("[data-delt]").forEach(b=> b.onclick = async ()=>{
+    if(!confirm("حذف هذه المهمة؟")) return;
+    const { error } = await db.from("tasks").update({ deleted_at:new Date().toISOString() }).eq("id",b.dataset.delt);
+    if(error) return toast("خطأ: "+error.message); toast("حُذف"); viewTasks();
+  });
+}
+
+async function viewTaskForm(id){
+  const isNew = id==="new";
+  const { groups, people } = await fetchLookups();
+  let t = { title:"", description:"", org_group_id:"", status:"not_yet_defined", is_top_priority:false };
+  let assignees = new Set(), links = [], files = [];
+  if(!isNew){
+    t = await db.from("tasks").select("*").eq("id",id).maybeSingle().then(r=>r.data)||t;
+    const [asg, lk, fl] = await Promise.all([
+      db.from("task_assignments").select("person_id").eq("task_id",id).then(r=>r.data||[]),
+      db.from("links").select("*").eq("task_id",id).is("deleted_at",null).then(r=>r.data||[]),
+      db.from("files").select("*").eq("task_id",id).is("deleted_at",null).then(r=>r.data||[]),
+    ]);
+    assignees = new Set(asg.map(a=>a.person_id)); links = lk; files = fl;
+  }
+  const gOpts = `<option value="">— بدون —</option>`+groups.map(g=>opt(g.id,g.name_ar,t.org_group_id||"")).join("");
+  const sOpts = Object.entries(STATUS).map(([v,l])=>opt(v,l,t.status)).join("");
+  const asgChips = people.map(p=>`<span class="opt ${assignees.has(p.id)?"on":""}" data-asg="${p.id}">${esc(p.full_name_ar)}</span>`).join("");
+  const linkList = links.map(l=>`<span class="chip" data-link="${l.id}"><a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label||l.url)}</a><button data-dellink="${l.id}">×</button></span>`).join("");
+  const fileList = files.map(f=>`<span class="chip" data-file="${f.id}">${esc(f.original_filename)}<button data-delfile="${f.id}" data-path="${esc(f.storage_path)}">×</button></span>`).join("");
+  mountShell(`<a class="back" href="#/tasks">← كل المهام</a>
+    <div class="section-h"><h2>${isNew?"مهمة جديدة":esc(t.title)}</h2></div>
+    <div class="card"><div class="form-grid">
+      <div class="field">اسم المهمة<input id="t_title" value="${esc(t.title)}"></div>
+      <div class="field">الوصف<textarea id="t_desc">${esc(t.description||"")}</textarea></div>
+      <div class="two-col"><div class="field">الفريق/المجموعة<select id="t_group">${gOpts}</select></div>
+        <div class="field">الحالة<select id="t_status">${sOpts}</select></div></div>
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="t_prio" ${t.is_top_priority?"checked":""} style="width:auto"> أولوية قصوى</label>
+      <div class="field">المسؤولون<div class="multiselect" id="t_asg">${asgChips}</div></div>
+      <div class="row-actions"><button class="btn btn-primary" id="t_save">حفظ</button></div>
+    </div></div>
+    ${!isNew?`<div class="card">
+      <div class="section-h"><h2 style="font-size:14px">الروابط الخارجية</h2></div>
+      <div class="chips" id="t_links">${linkList||'<span class="muted">لا توجد روابط</span>'}</div>
+      ${canEdit()?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <input id="l_label" placeholder="الوصف (اختياري)" style="flex:1;min-width:120px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--background);color:var(--foreground)">
+        <input id="l_url" placeholder="https://..." style="flex:2;min-width:160px;padding:8px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--background);color:var(--foreground)">
+        <button class="btn" id="l_add">إضافة رابط</button></div>`:""}
+    </div>
+    <div class="card">
+      <div class="section-h"><h2 style="font-size:14px">الملفات (حتى 10 ميجابايت للملف)</h2></div>
+      <div class="chips" id="t_files">${fileList||'<span class="muted">لا توجد ملفات</span>'}</div>
+      ${canEdit()?`<div style="margin-top:10px"><input type="file" id="f_input"> <span class="muted" id="f_status"></span></div>`:""}
+    </div>`:""}`);
+  if(!canEdit()){ document.querySelectorAll("#view input,#view select,#view textarea,#view .opt,#view button").forEach(e=>{ if(e.id!=="logoutBtn"){e.disabled=true;e.style.pointerEvents="none";} }); return; }
+  document.querySelectorAll("#t_asg .opt").forEach(o=> o.onclick=()=>o.classList.toggle("on"));
+  $("t_save").onclick = async ()=>{
+    const payload = { title:$("t_title").value.trim(), description:$("t_desc").value.trim()||null,
+      org_group_id:$("t_group").value||null, status:$("t_status").value, is_top_priority:$("t_prio").checked };
+    if(!payload.title) return toast("اسم المهمة مطلوب");
+    let taskId=id;
+    if(isNew){ const { data, error } = await db.from("tasks").insert(payload).select("id").single();
+      if(error) return toast("خطأ: "+error.message); taskId=data.id; }
+    else { const { error } = await db.from("tasks").update(payload).eq("id",id); if(error) return toast("خطأ: "+error.message); }
+    const sel=[...document.querySelectorAll('#t_asg .opt.on')].map(o=>o.dataset.asg);
+    await db.from("task_assignments").delete().eq("task_id",taskId);
+    if(sel.length) await db.from("task_assignments").insert(sel.map(person_id=>({task_id:taskId,person_id})));
+    toast("حُفظت"); if(isNew) location.hash="#/tasks/"+taskId; else location.hash="#/tasks";
+  };
+  if(!isNew){
+    $("l_add") && ($("l_add").onclick = async ()=>{
+      const url=$("l_url").value.trim(); if(!url) return toast("الرابط مطلوب");
+      let type="other"; if(url.includes("drive.google")) type="drive"; else if(url.includes("notion.")) type="notion";
+      const { error } = await db.from("links").insert({ task_id:id, url, label:$("l_label").value.trim()||null, link_type:type });
+      if(error) return toast("خطأ: "+error.message); viewTaskForm(id);
+    });
+    document.querySelectorAll("[data-dellink]").forEach(b=> b.onclick = async ()=>{ await db.from("links").delete().eq("id",b.dataset.dellink); viewTaskForm(id); });
+    const fin=$("f_input");
+    fin && (fin.onchange = async ()=>{
+      const file=fin.files[0]; if(!file) return;
+      if(file.size>10*1024*1024) return toast("الملف أكبر من 10 ميجابايت");
+      $("f_status").textContent="جارٍ الرفع…";
+      const path = `${id}/${crypto.randomUUID()}-${file.name}`;
+      const { error:upErr } = await db.storage.from("task-files").upload(path, file, { upsert:false });
+      if(upErr){ $("f_status").textContent=""; return toast("خطأ في الرفع: "+upErr.message); }
+      const { error } = await db.from("files").insert({ task_id:id, storage_path:path, original_filename:file.name, mime_type:file.type||null, size_bytes:file.size });
+      if(error) return toast("خطأ: "+error.message); viewTaskForm(id);
+    });
+    document.querySelectorAll("[data-delfile]").forEach(b=> b.onclick = async ()=>{
+      await db.storage.from("task-files").remove([b.dataset.path]);
+      await db.from("files").delete().eq("id",b.dataset.delfile); viewTaskForm(id);
+    });
+  }
+}
+
+/* ---------------- Users (admin only) ---------------- */
+async function viewUsers(){
+  if(ME.role!=="admin"){ location.hash="#/"; return; }
+  const rows = await db.from("app_users").select("*").order("email").then(r=>r.data||[]);
+  const list = rows.map(u=>`<tr>
+    <td>${esc(u.email)}</td>
+    <td><select data-role="${u.id}"><option value="admin" ${u.app_role==="admin"?"selected":""}>مدير</option>
+      <option value="editor" ${u.app_role==="editor"?"selected":""}>محرر</option>
+      <option value="viewer" ${u.app_role==="viewer"?"selected":""}>مشاهد</option></select></td>
+    <td><label class="muted"><input type="checkbox" data-dis="${u.id}" ${u.is_disabled?"checked":""}> معطّل</label></td></tr>`).join("");
+  mountShell(`<div class="section-h"><h2>المستخدمون</h2></div>
+    <p class="muted" style="margin-bottom:14px">إنشاء حساب جديد يتم من لوحة Supabase (Authentication → Users)، ثم يظهر هنا لتعيين صلاحيته. التغييرات تُحفظ فورًا.</p>
+    <div class="card"><table><thead><tr><th>البريد</th><th>الصلاحية</th><th>الحالة</th></tr></thead><tbody>${list}</tbody></table></div>`);
+  document.querySelectorAll("[data-role]").forEach(s=> s.onchange = async ()=>{
+    const { error } = await db.from("app_users").update({ app_role:s.value }).eq("id",s.dataset.role);
+    toast(error?("خطأ: "+error.message):"حُدّثت الصلاحية");
+  });
+  document.querySelectorAll("[data-dis]").forEach(c=> c.onchange = async ()=>{
+    const { error } = await db.from("app_users").update({ is_disabled:c.checked }).eq("id",c.dataset.dis);
+    toast(error?("خطأ: "+error.message):(c.checked?"عُطّل":"فُعّل"));
+  });
+}
+
+/* ---------------- dashboard ---------------- */
+async function viewDashboard(){
+  const [p,g,t] = await Promise.all([
+    db.from("people").select("id",{count:"exact",head:true}).is("deleted_at",null),
+    db.from("org_groups").select("id",{count:"exact",head:true}).is("deleted_at",null),
+    db.from("tasks").select("id",{count:"exact",head:true}).is("deleted_at",null),
+  ]);
+  mountShell(`<div class="section-h"><h2>نظرة عامة</h2></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+      <a class="card" href="#/people" style="text-decoration:none"><div style="font-size:30px;font-weight:800">${p.count??0}</div><div class="muted">الأشخاص</div></a>
+      <a class="card" href="#/teams" style="text-decoration:none"><div style="font-size:30px;font-weight:800">${g.count??0}</div><div class="muted">الفرق والمجموعات</div></a>
+      <a class="card" href="#/tasks" style="text-decoration:none"><div style="font-size:30px;font-weight:800">${t.count??0}</div><div class="muted">المهام</div></a>
+    </div>
+    <p class="muted" style="margin-top:20px">اختر قسمًا من الأعلى للإضافة أو التعديل. كل تغيير ينعكس مباشرة على <a href="./">الخريطة العامة</a>.</p>`);
+}
+
+/* ---------------- router ---------------- */
+async function router(){
+  if(!ME){ renderLogin(); return; }
+  const h = location.hash || "#/";
+  const parts = h.slice(2).split("/"); // after "#/"
+  try{
+    if(h==="#/"||h==="") return viewDashboard();
+    if(parts[0]==="people") return parts[1] ? viewPersonForm(parts[1]) : viewPeople();
+    if(parts[0]==="teams") return parts[1] ? viewTeamForm(parts[1]) : viewTeams();
+    if(parts[0]==="tasks") return parts[1] ? viewTaskForm(parts[1]) : viewTasks();
+    if(parts[0]==="categories") return viewCategories();
+    if(parts[0]==="roles") return viewRoles();
+    if(parts[0]==="users") return viewUsers();
+    viewDashboard();
+  }catch(e){ mountShell(`<p class="err">حدث خطأ: ${esc(e.message)}</p>`); }
+}
+function renderApp(){ router(); }
+window.addEventListener("hashchange", router);
+
+(async function init(){
+  await loadMe();
+  if(!ME) renderLogin(); else router();
+})();
+</script>
+</body>
+</html>

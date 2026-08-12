@@ -91,6 +91,9 @@
   .pill-priority{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text)}
   .state{max-width:1180px;margin:0 auto;padding:80px 20px;text-align:center;color:var(--muted);font-size:15px}
   .state.err{color:#dc2626}
+  .admin-link{position:fixed;top:14px;left:14px;font-size:12.5px;font-weight:600;color:var(--muted);
+    text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--surface);z-index:10}
+  .admin-link:hover{color:var(--accent);border-color:var(--accent)}
   @media (max-width:760px){
     .branches{flex-direction:column;gap:8px}
     .branches::before,.branches .col::before{display:none}
@@ -101,6 +104,7 @@
 </style>
 </head>
 <body>
+  <a class="admin-link" href="./admin.html">تسجيل الدخول للإدارة ↗</a>
   <div id="app"><div class="state">جارٍ تحميل خريطة الفريق…</div></div>
 
 <script>
