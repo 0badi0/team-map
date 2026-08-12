@@ -219,9 +219,12 @@ function initCy(){
   const allPos = DATA.people.every(p=>p.pos_x!=null) && DATA.groups.every(g=>g.pos_x!=null);
   cy = cytoscape({
     container:$("cy"), elements:elements(), style:STYLE, wheelSensitivity:0.25,
-    minZoom:0.2, maxZoom:2.5, boxSelectionEnabled:false,
+    minZoom:0.2, maxZoom:2.5, boxSelectionEnabled:false, pixelRatio:1,
     autoungrabify:true, layout:{ name:"preset" }
   });
+  // keep canvas in sync with container size (fixes offset renders after layout/resize)
+  requestAnimationFrame(()=>{ cy.resize(); if(allPos) cy.fit(50); });
+  window.addEventListener("resize", ()=>{ cy.resize(); });
   cy.on("tap","node", ev=>{ if(!connectMode) openNode(ev.target); });
   cy.on("tap","edge", ev=>{ if(canEdit() && !connectMode) confirmDeleteEdge(ev.target); });
   cy.on("tap", ev=>{ if(ev.target===cy) closePanel(); });
@@ -455,7 +458,7 @@ async function openGroup(id){
 }
 
 /* ---------- toolbar / auth ---------- */
-$("fitBtn").onclick=()=>cy&&cy.animate({fit:{padding:50}},{duration:250});
+$("fitBtn").onclick=()=>{ if(cy){ cy.resize(); cy.animate({fit:{padding:50}},{duration:250}); } };
 $("addPerson")&&($("addPerson").onclick=()=>addNodeFlow("person"));
 $("addDept")&&($("addDept").onclick=()=>addNodeFlow("group"));
 $("connectBtn")&&($("connectBtn").onclick=()=>{
