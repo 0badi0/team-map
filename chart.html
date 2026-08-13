@@ -134,6 +134,21 @@
   .tray-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-align:center}
   [data-drag]{cursor:grab}
   [data-drag]:active{cursor:grabbing}
+  /* clean org-chart tree layout (any depth/branching, no overlap) */
+  .tree{overflow-x:auto;padding:10px 4px 30px;text-align:center}
+  .tree ul{display:flex;justify-content:center;padding-top:22px;position:relative;margin:0;list-style:none}
+  .tree > ul{padding-top:0}
+  .tree li{list-style:none;position:relative;padding:22px 14px 0;text-align:center}
+  .tree li::before,.tree li::after{content:"";position:absolute;top:0;width:50%;height:22px;border-top:2px solid var(--line)}
+  .tree li::before{right:50%}
+  .tree li::after{left:50%;border-left:2px solid var(--line)}
+  .tree li:only-child{padding-top:22px}
+  .tree li:only-child::before,.tree li:only-child::after{display:none}
+  .tree li:first-child::before,.tree li:last-child::after{border:0}
+  .tree li:last-child::before{border-right:2px solid var(--line)}
+  .tree li:first-child::after{border-left:2px solid var(--line)}
+  .tree ul ul::before{content:"";position:absolute;top:0;left:50%;height:22px;border-left:2px solid var(--line)}
+  .tree .node{margin:0 auto}
 </style>
 </head>
 <body>
@@ -415,10 +430,7 @@ function build(data){
   function renderNode(k, path){
     if(path.includes(k)) return "";
     const kids = (childrenOf.get(k)||[]);
-    const childRow = kids.length
-      ? `<div class="stem-arrow"></div><div class="row">${kids.map(c=>`<div class="col">${renderNode(c,[...path,k])}</div>`).join("")}</div>`
-      : "";
-    return dragNode(k) + childRow;
+    return `<li>${dragNode(k)}${kids.length?`<ul>${kids.map(c=>renderNode(c,[...path,k])).join("")}</ul>`:""}</li>`;
   }
 
   const toolbar = canEdit() ? `<div class="toolbar"><button class="ebtn ebtn-sm" id="addPersonBtn">+ شخص</button><button class="ebtn ebtn-sm" id="addDeptBtn">+ قسم / فريق</button></div>` : "";
@@ -434,7 +446,7 @@ function build(data){
     <div class="chart-head"><h1>خريطة الفريق</h1><p>${hint}</p></div>
     ${toolbar}
     ${trayHtml}
-    <div class="trunk">${ownerKey?renderNode(ownerKey,[]):'<p class="empty-note">لا توجد بيانات</p>'}</div>
+    <div class="tree">${ownerKey?`<ul>${renderNode(ownerKey,[])}</ul>`:'<p class="empty-note">لا توجد بيانات</p>'}</div>
     <div class="detail" id="detail"></div>
   </div>`;
 
