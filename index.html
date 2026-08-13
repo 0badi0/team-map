@@ -128,6 +128,10 @@
     padding:9px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:70;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:.94}
   .toolbar{display:flex;gap:8px;justify-content:center;margin:-24px 0 28px;flex-wrap:wrap}
+  .tck-list{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto;margin-top:2px}
+  .tck{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;font-size:14px;cursor:pointer;border:1px solid transparent}
+  .tck:hover{background:rgba(125,125,125,.10)}
+  .tck input{width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex:none}
 </style>
 </head>
 <body>
@@ -215,6 +219,10 @@ function renderDetail(id){
     : `<p class="empty-note">لا توجد مهام.</p>`;
   const tasksBlock = (d.kind==="person")
     ? `<div class="tasks-block"><div class="tasks-title">المهام ${ed?`<button class="ebtn ebtn-sm" id="addTask" style="float:inline-end">+ مهمة</button>`:""}</div>${tasks}</div>` : "";
+  const teamsAll = teamList(LAST.groups);
+  const deptBlock = (ed && d.kind==="person" && teamsAll.length)
+    ? `<div class="tasks-block"><div class="tasks-title">الأقسام / الفرق <span style="font-weight:500;color:var(--faint)">(ضع الشخص في أكثر من قسم ليظهر في كلٍّ منها)</span></div>
+        <div class="tck-list">${teamsAll.map(g=>`<label class="tck"><input type="checkbox" data-teamtoggle="${g.id}" ${(d.teamIds||[]).includes(g.id)?"checked":""}> ${esc(g.name_ar)}</label>`).join("")}</div></div>` : "";
   const editRow = ed
     ? `<div class="edit-row">
         ${d.editHref?`<a class="ebtn ebtn-sm" href="${d.editHref}">تعديل الحقول ↗</a>`:""}
@@ -228,11 +236,22 @@ function renderDetail(id){
     <div class="detail-stats">
       <div><b>الفريق:</b> <span>${esc(d.team)}</span></div>
       <div><b>الإدارة:</b> <span>${esc(d.manager)}</span></div>
-    </div>${respHtml}${respAdd}${tasksBlock}${editRow}`;
+    </div>${respHtml}${respAdd}${tasksBlock}${deptBlock}${editRow}`;
   host.scrollIntoView({behavior:"smooth",block:"nearest"});
   // wire edit controls
   host.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>openTaskCard(b.dataset.task, id));
   if(!ed) return;
+  host.querySelectorAll("[data-teamtoggle]").forEach(cb=>cb.onchange=async()=>{
+    const gid=cb.dataset.teamtoggle;
+    if(cb.checked){
+      const { error }=await db.from("person_org_group_memberships").insert({ person_id:d.dbId, org_group_id:gid });
+      if(error){ cb.checked=false; return toast("خطأ: "+error.message); }
+    } else {
+      const { error }=await db.from("person_org_group_memberships").delete().eq("person_id",d.dbId).eq("org_group_id",gid);
+      if(error){ cb.checked=true; return toast("خطأ: "+error.message); }
+    }
+    await refreshKeep();
+  });
   host.querySelectorAll("[data-delresp]").forEach(b=>b.onclick=async()=>{ await db.from("responsibilities").delete().eq("id",b.dataset.delresp); await refreshKeep(); });
   const ar=document.getElementById("addResp"); ar&&(ar.onclick=async()=>{
     const v=document.getElementById("newResp").value.trim(); if(!v)return;
@@ -348,14 +367,16 @@ function build(data){
   DETAILS = {};
   people.forEach(p=>{
     const roles = rolesByPerson.get(p.id)||[];
-    const teams = groups.filter(g=>(memberIdsByGroup.get(g.id)||[]).includes(p.id)).map(g=>g.name_ar);
+    const memberGroups = groups.filter(g=>(memberIdsByGroup.get(g.id)||[]).includes(p.id));
+    const teams = memberGroups.map(g=>g.name_ar);
+    const teamIds = memberGroups.filter(g=>g.group_type==="team").map(g=>g.id);
     const badge = p.classification==="owner"?"owner":p.classification==="freelancer"?"freelancer":"employee";
     DETAILS[p.id] = {
       kind:"person", dbId:p.id, editHref:`./admin.html#/people/${p.id}`,
       name: p.nickname ? `${p.full_name_ar} «${p.nickname}»` : p.full_name_ar,
       subtitle: roles.slice(0,2).join(" · ") || "—",
       badge, badgeLabel: classificationLabel[p.classification],
-      team: teams.join(" / ") || "—",
+      team: teams.join(" / ") || "—", teamIds,
       manager: p.manager_id ? (byId(p.manager_id)?.full_name_ar ?? "—") : "—",
       resp: respByPerson.get(p.id)||[],
       tasks: tasksByPerson.get(p.id)||[],
@@ -438,17 +459,39 @@ function build(data){
 }
 
 // team list for adding a person
-function teamList(groups){ return groups.filter(g=>g.group_type==="team"); }
-async function addPersonFlow(){
-  const name=prompt("اسم الشخص الجديد:"); if(!name||!name.trim())return;
+function teamList(groups){ return (groups||[]).filter(g=>g.group_type==="team"); }
+// add a person and place them in ONE OR MORE departments at once (checkbox modal)
+function addPersonFlow(){
   const teams=teamList(LAST.groups);
-  const menu=teams.map((g,i)=>`${i+1}) ${g.name_ar}`).join("\n");
-  const pick=prompt(`أضِف ${name} إلى أي فريق؟ اكتب الرقم:\n${menu}`); if(pick===null)return;
-  const idx=parseInt(pick,10)-1; const team=teams[idx];
-  const { data, error }=await db.from("people").insert({ full_name_ar:name.trim(), classification:"employee" }).select("id").single();
-  if(error) return toast("خطأ: "+error.message);
-  if(team) await db.from("person_org_group_memberships").insert({ person_id:data.id, org_group_id:team.id });
-  toast("أُضيف الشخص"); await refreshAll(data.id);
+  if(!teams.length) return toast("أضِف قسمًا أولاً");
+  const wrap=document.createElement("div");
+  wrap.className="modal-bg open";
+  wrap.innerHTML=`<div class="modal">
+      <h3 style="margin:0 0 16px;font-size:18px;font-weight:800">إضافة شخص</h3>
+      <label class="mfield">الاسم<input id="apName" type="text" placeholder="اسم الشخص"></label>
+      <div class="tasks-title" style="margin:12px 0 6px">في أي قسم / فريق؟ <span style="font-weight:500">(يمكن اختيار أكثر من واحد)</span></div>
+      <div class="tck-list">${teams.map(g=>`<label class="tck"><input type="checkbox" value="${g.id}"> ${esc(g.name_ar)}</label>`).join("")}</div>
+      <div style="display:flex;gap:8px;margin-top:18px">
+        <button class="ebtn ebtn-primary" id="apSave" style="flex:1">إضافة</button>
+        <button class="ebtn" id="apCancel">إلغاء</button>
+      </div></div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector("#apCancel").onclick=close;
+  wrap.addEventListener("click",e=>{ if(e.target===wrap) close(); });
+  const nameInput=wrap.querySelector("#apName"); nameInput.focus();
+  nameInput.addEventListener("keydown",e=>{ if(e.key==="Enter") wrap.querySelector("#apSave").click(); });
+  wrap.querySelector("#apSave").onclick=async()=>{
+    const name=nameInput.value.trim(); if(!name) return toast("أدخل الاسم");
+    const chosen=[...wrap.querySelectorAll(".tck input:checked")].map(i=>i.value);
+    const { data, error }=await db.from("people").insert({ full_name_ar:name, classification:"employee" }).select("id").single();
+    if(error) return toast("خطأ: "+error.message);
+    if(chosen.length){
+      const { error:me }=await db.from("person_org_group_memberships").insert(chosen.map(gid=>({ person_id:data.id, org_group_id:gid })));
+      if(me) return toast("خطأ: "+me.message);
+    }
+    close(); toast("أُضيف الشخص"); await refreshAll(data.id);
+  };
 }
 async function addDeptFlow(){
   const name=prompt("اسم القسم / الفريق الجديد:"); if(!name||!name.trim())return;
