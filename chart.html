@@ -128,27 +128,6 @@
     padding:9px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:70;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:.94}
   .toolbar{display:flex;gap:8px;justify-content:center;margin:-24px 0 28px;flex-wrap:wrap}
-  .node-free{background:var(--badge-freelancer-bg);color:var(--badge-freelancer-text);border-color:var(--badge-freelancer-bg)}
-  .drop-hover{outline:2px dashed var(--accent);outline-offset:2px;background:color-mix(in srgb, var(--accent) 12%, transparent)}
-  .tray{max-width:900px;margin:0 auto 26px;padding:14px 16px;border:1px dashed var(--border-strong);border-radius:14px;background:var(--surface)}
-  .tray-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:10px;text-align:center}
-  [data-drag]{cursor:grab}
-  [data-drag]:active{cursor:grabbing}
-  /* clean org-chart tree layout (any depth/branching, no overlap) */
-  .tree{overflow-x:auto;padding:10px 4px 30px;text-align:center}
-  .tree ul{display:flex;justify-content:center;padding-top:22px;position:relative;margin:0;list-style:none}
-  .tree > ul{padding-top:0}
-  .tree li{list-style:none;position:relative;padding:22px 14px 0;text-align:center}
-  .tree li::before,.tree li::after{content:"";position:absolute;top:0;width:50%;height:22px;border-top:2px solid var(--line)}
-  .tree li::before{right:50%}
-  .tree li::after{left:50%;border-left:2px solid var(--line)}
-  .tree li:only-child{padding-top:22px}
-  .tree li:only-child::before,.tree li:only-child::after{display:none}
-  .tree li:first-child::before,.tree li:last-child::after{border:0}
-  .tree li:last-child::before{border-right:2px solid var(--line)}
-  .tree li:first-child::after{border-left:2px solid var(--line)}
-  .tree ul ul::before{content:"";position:absolute;top:0;left:50%;height:22px;border-left:2px solid var(--line)}
-  .tree .node{margin:0 auto}
 </style>
 </head>
 <body>
@@ -218,7 +197,7 @@ function statusLabel(s){ return {not_yet_defined:"غير محددة",planned:"م
 
 let selectedId = null;
 
-function renderDetail(id, scroll){
+function renderDetail(id){
   const d = DETAILS[id];
   const host = document.getElementById("detail");
   if(!d || !host) return;
@@ -250,7 +229,7 @@ function renderDetail(id, scroll){
       <div><b>الفريق:</b> <span>${esc(d.team)}</span></div>
       <div><b>الإدارة:</b> <span>${esc(d.manager)}</span></div>
     </div>${respHtml}${respAdd}${tasksBlock}${editRow}`;
-  if(scroll) host.scrollIntoView({behavior:"smooth",block:"nearest"});
+  host.scrollIntoView({behavior:"smooth",block:"nearest"});
   // wire edit controls
   host.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>openTaskCard(b.dataset.task, id));
   if(!ed) return;
@@ -397,161 +376,92 @@ function build(data){
       {text:"يتفرّع إلى ثلاثة فرق فقط: Management وMedia وSales."},
       {text:"Freelancers تصنيف عمل، وOperations وظيفة عابرة للفرق — وليسا فريقًا رابعًا."} ] };
 
-  // ---- hierarchy from connections (drag-and-drop org tree, single parent per node) ----
-  const conns = (data.conns||[]).filter(c=>
-    (c.source_kind==="person"?personById.has(c.source_id):groupById.has(c.source_id)) &&
-    (c.target_kind==="person"?personById.has(c.target_id):groupById.has(c.target_id)));
-  const childrenOf = new Map();     // parentKey -> [childKey]
-  const parentSet = new Set();      // childKeys that have a parent
-  conns.forEach(c=>{
-    const s=c.source_kind+":"+c.source_id, t=c.target_kind+":"+c.target_id;
-    if(parentSet.has(t)) return;    // keep first parent only (single-parent tree)
-    (childrenOf.get(s) || childrenOf.set(s,[]).get(s)).push(t);
-    parentSet.add(t);
-  });
-  CUR_CHILDREN = childrenOf;
-  const ownerP = people.find(p=>p.classification==="owner") || byId(P.ali);
-  const ownerKey = ownerP ? "person:"+ownerP.id : null;
-  const unplaced = [];
-  people.forEach(p=>{ const k="person:"+p.id; if(k!==ownerKey && !parentSet.has(k)) unplaced.push(k); });
-  groups.forEach(g=>{ const k="group:"+g.id; if(!parentSet.has(k)) unplaced.push(k); });
-
-  const kKind = k => k.slice(0,k.indexOf(":"));
-  const kId   = k => k.slice(k.indexOf(":")+1);
-  const detailIdOf = k => kKind(k)==="person" ? kId(k) : (groupById.get(kId(k))?.slug || kId(k));
-  const labelOf = k => { if(kKind(k)==="group") return groupById.get(kId(k))?.name_ar||"?";
-    const p=byId(kId(k)); if(!p)return"?"; return p.classification==="owner"?`${p.full_name_ar} — صاحب الشركة`:(p.nickname?`${p.full_name_ar} «${p.nickname}»`:p.full_name_ar); };
-  const clsOf = k => { if(kKind(k)==="group") return "group"; const p=byId(kId(k)); return p?.classification==="owner"?"owner":p?.classification==="freelancer"?"free":"person"; };
-  function dragNode(k){
-    const cls=clsOf(k);
-    const nodeCls = "node"+(cls==="owner"?" node-owner":cls==="group"?" node-group":cls==="free"?" node-free":"");
-    return `<button type="button" class="${nodeCls}" data-detail="${detailIdOf(k)}" data-nk="${esc(k)}" ${canEdit()&&cls!=="owner"?'data-drag="1"':""}>${esc(labelOf(k))}</button>`;
-  }
-  function renderNode(k, path){
-    if(path.includes(k)) return "";
-    const kids = (childrenOf.get(k)||[]);
-    return `<li>${dragNode(k)}${kids.length?`<ul>${kids.map(c=>renderNode(c,[...path,k])).join("")}</ul>`:""}</li>`;
-  }
-
+  // ---- node builders ----
+  const pNode = (id, kind="person") => nodeHtml(byId(id)?.full_name_ar ?? "?", kind, id);
+  const gNode = (slug, kind="group") => { const g=groupBySlug.get(slug); return nodeHtml(g?.name_ar ?? slug, kind, slug); };
+  const mgmtMembers = (memberIdsByGroup.get(groupBySlug.get("management")?.id)||[]);
+  // people added to Media/Sales beyond the curated chain, appended so they show up
+  const mediaId = groupBySlug.get("media")?.id, salesId = groupBySlug.get("sales")?.id;
+  const mediaCurated = [P.ahmad,P.ahsan,P.haitham,P.mohammed];
+  const salesCurated = [P.sami,P.malek];
+  const mediaExtra = (memberIdsByGroup.get(mediaId)||[]).filter(id=>!mediaCurated.includes(id));
+  const salesExtra = (memberIdsByGroup.get(salesId)||[]).filter(id=>!salesCurated.includes(id));
+  // brand-new top-level teams (departments) become their own columns
+  const knownTeams = ["management","media","sales"];
+  const newTeams = groups.filter(g=>g.group_type==="team" && !knownTeams.includes(g.slug));
+  const teamCol = g => `<div class="col">${nodeHtml(g.name_ar,"label",g.slug)}<div class="stem-arrow"></div>
+      <div class="row">${(memberIdsByGroup.get(g.id)||[]).map(id=>pNode(id)).join("")||'<span class="empty-note">لا أعضاء بعد — أضِف شخصًا</span>'}</div></div>`;
   const toolbar = canEdit() ? `<div class="toolbar"><button class="ebtn ebtn-sm" id="addPersonBtn">+ شخص</button><button class="ebtn ebtn-sm" id="addDeptBtn">+ قسم / فريق</button></div>` : "";
-  const trayHtml = unplaced.length
-    ? `<div class="tray" data-drop-root="1"><div class="tray-title">${canEdit()?"غير موضوعين — اسحبهم إلى مكانهم في الخريطة":"غير موضوعين بعد"}</div>
-        <div class="cross-wrap">${unplaced.map(k=>dragNode(k)).join("")}</div></div>` : "";
-  const hint = canEdit()
-    ? "اسحب أي صندوق وأفلته على مديره أو قسمه لنقله · اضغط لعرض التفاصيل"
-    : "اضغط على أي اسم أو مجموعة لعرض تفاصيلها بالأسفل";
 
   const html = `
   <div class="chart-wrap">
-    <div class="chart-head"><h1>خريطة الفريق</h1><p>${hint}</p></div>
+    <div class="chart-head"><h1>خريطة الفريق</h1><p>اضغط على أي اسم أو مجموعة لعرض تفاصيلها بالأسفل</p></div>
     ${toolbar}
-    ${trayHtml}
-    <div class="tree">${ownerKey?`<ul>${renderNode(ownerKey,[])}</ul>`:'<p class="empty-note">لا توجد بيانات</p>'}</div>
+    <div class="trunk">${nodeHtml("علي — صاحب الشركة","owner",P.ali)}<div class="stem-arrow"></div>${nodeHtml("Teams","label","teams")}</div>
+    <div class="branches">
+      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>
+        <div class="row">${mgmtMembers.map(id=>pNode(id)).join("")}</div></div>
+      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>
+        ${pNode(P.ahmad)}<div class="stem-arrow"></div>${pNode(P.ahsan)}<div class="stem-arrow"></div>
+        <div class="row">${pNode(P.haitham)}${pNode(P.mohammed)}</div>
+        <div class="stem-arrow"></div>${gNode("freelance-editors")}
+        ${mediaExtra.length?`<div class="stem-arrow"></div><div class="row">${mediaExtra.map(id=>pNode(id)).join("")}</div>`:""}</div>
+      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>
+        <div class="row">${pNode(P.sami)}${pNode(P.malek)}</div>
+        <div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
+        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div>
+        ${salesExtra.length?`<div class="stem-arrow"></div><div class="row">${salesExtra.map(id=>pNode(id)).join("")}</div>`:""}</div>
+      ${newTeams.map(teamCol).join("")}
+    </div>
+    <div class="more-hint">علاقات عابرة للفرق بالأسفل</div>
+    <hr class="divider" />
+    <div class="cross-band">
+      <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Freelancers</div>
+        <div class="cross-wrap">${gNode("setters")}${gNode("closers")}${pNode(P.raafat)}${pNode(P.anas)}${gNode("freelance-editors")}</div></div>
+      <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Operations</div>
+        <div class="cross-wrap">${pNode(P.kamal)}${pNode(P.osama)}</div></div>
+      <div class="cross-col"><div class="cross-title">علاقة شخصية مباشرة</div>
+        <div class="pa-line">${pNode(P.ali)}<span class="arrow-ico">←</span>${pNode(P.kamal)}</div></div>
+    </div>
     <div class="detail" id="detail"></div>
   </div>`;
 
   document.getElementById("app").innerHTML = html;
-  wireNodes();
+  document.querySelectorAll(".node").forEach(n=>{
+    if(!n.dataset.detail) return;
+    n.addEventListener("click", ()=>renderDetail(n.dataset.detail));
+  });
   const ap=document.getElementById("addPersonBtn"); ap&&(ap.onclick=addPersonFlow);
   const ad=document.getElementById("addDeptBtn"); ad&&(ad.onclick=addDeptFlow);
-  const first = (data.keepId && DETAILS[data.keepId]) ? data.keepId : (ownerKey?detailIdOf(ownerKey):DEFAULT_ID);
+  const first = (data.keepId && DETAILS[data.keepId]) ? data.keepId : DEFAULT_ID;
   renderDetail(first);
 }
 
-// ---- drag & drop wiring (pointer-based: works on mouse + touch) ----
-let CUR_CHILDREN = new Map(), DRAG = null, DRAG_LISTENERS = false;
-function descOf(k){ const out=new Set(), st=[k]; while(st.length){ const c=st.pop(); (CUR_CHILDREN.get(c)||[]).forEach(ch=>{ if(!out.has(ch)){ out.add(ch); st.push(ch);} }); } return out; }
-function dropTargetAt(x,y){
-  if(DRAG?.ghost) DRAG.ghost.style.display="none";
-  const el=document.elementFromPoint(x,y);
-  if(DRAG?.ghost) DRAG.ghost.style.display="";
-  if(!el) return null;
-  const node=el.closest(".node[data-nk]");
-  if(node && node!==DRAG.el) return node;
-  const root=el.closest("[data-drop-root]");
-  return root||null;
-}
-function onDragMove(e){
-  if(!DRAG) return;
-  const dx=e.clientX-DRAG.x0, dy=e.clientY-DRAG.y0;
-  if(!DRAG.moved && Math.hypot(dx,dy)<6) return;
-  DRAG.moved=true; DRAG.el._moved=true;
-  e.preventDefault();
-  if(!DRAG.ghost){
-    const g=DRAG.el.cloneNode(true); g.removeAttribute("data-nk");
-    Object.assign(g.style,{position:"fixed",pointerEvents:"none",opacity:".9",zIndex:999,transform:"translate(-50%,-50%)",margin:0});
-    document.body.appendChild(g); DRAG.ghost=g; DRAG.el.style.opacity=".4";
-  }
-  DRAG.ghost.style.left=e.clientX+"px"; DRAG.ghost.style.top=e.clientY+"px";
-  document.querySelectorAll(".drop-hover").forEach(x=>x.classList.remove("drop-hover"));
-  const t=dropTargetAt(e.clientX,e.clientY); if(t) t.classList.add("drop-hover");
-}
-function onDragUp(e){
-  if(!DRAG) return;
-  const st=DRAG;
-  // compute drop target while state is still valid
-  if(st.ghost) st.ghost.style.display="none";
-  const el=document.elementFromPoint(e.clientX,e.clientY);
-  let t=null;
-  if(el){ const node=el.closest(".node[data-nk]"); if(node && node!==st.el) t=node; else { const root=el.closest("[data-drop-root]"); if(root) t=root; } }
-  if(st.ghost) st.ghost.remove();
-  if(st.el) st.el.style.opacity="";
-  document.querySelectorAll(".drop-hover").forEach(x=>x.classList.remove("drop-hover"));
-  DRAG=null;
-  if(!st.moved || !t) return;
-  if(t.hasAttribute("data-drop-root")) reparent(st.nk, null);
-  else if(t.dataset.nk && t.dataset.nk!==st.nk) reparent(st.nk, t.dataset.nk);
-}
-function wireNodes(){
-  document.querySelectorAll(".node").forEach(n=>{
-    if(n.dataset.detail) n.addEventListener("click",()=>{ if(n._moved){ n._moved=false; return; } renderDetail(n.dataset.detail, true); });
-    if(canEdit() && n.dataset.drag){
-      n.style.touchAction="none";
-      n.addEventListener("pointerdown",e=>{ if(e.pointerType==="mouse" && e.button!==0) return; DRAG={ nk:n.dataset.nk, el:n, x0:e.clientX, y0:e.clientY, moved:false, ghost:null }; });
-    }
-  });
-  if(!DRAG_LISTENERS){
-    window.addEventListener("pointermove", onDragMove, { passive:false });
-    window.addEventListener("pointerup", onDragUp);
-    window.addEventListener("pointercancel", ()=>{ if(DRAG){ if(DRAG.ghost)DRAG.ghost.remove(); if(DRAG.el)DRAG.el.style.opacity=""; DRAG=null; document.querySelectorAll(".drop-hover").forEach(x=>x.classList.remove("drop-hover")); } });
-    DRAG_LISTENERS=true;
-  }
-}
-async function reparent(draggedNk, targetNk){
-  const dk=draggedNk.slice(0,draggedNk.indexOf(":")), did=draggedNk.slice(draggedNk.indexOf(":")+1);
-  const draggedDetail = dk==="person" ? did : (LAST.groups.find(g=>g.id===did)?.slug || did);
-  if(targetNk){
-    if(descOf(draggedNk).has(targetNk) || targetNk===draggedNk) return toast("لا يمكن وضع عنصر داخل نفسه أو داخل فرعه");
-    const tk=targetNk.slice(0,targetNk.indexOf(":")), tid=targetNk.slice(targetNk.indexOf(":")+1);
-    await db.from("connections").delete().eq("target_kind",dk).eq("target_id",did);
-    const { error }=await db.from("connections").insert({ source_kind:tk, source_id:tid, target_kind:dk, target_id:did });
-    if(error) return toast("خطأ: "+error.message);
-    toast("تم النقل ✓");
-  } else {
-    await db.from("connections").delete().eq("target_kind",dk).eq("target_id",did);
-    toast("أُزيل من الخريطة — اسحبه لمكان جديد");
-  }
-  await refreshAll(draggedDetail);
-}
-
+// team list for adding a person
+function teamList(groups){ return groups.filter(g=>g.group_type==="team"); }
 async function addPersonFlow(){
   const name=prompt("اسم الشخص الجديد:"); if(!name||!name.trim())return;
+  const teams=teamList(LAST.groups);
+  const menu=teams.map((g,i)=>`${i+1}) ${g.name_ar}`).join("\n");
+  const pick=prompt(`أضِف ${name} إلى أي فريق؟ اكتب الرقم:\n${menu}`); if(pick===null)return;
+  const idx=parseInt(pick,10)-1; const team=teams[idx];
   const { data, error }=await db.from("people").insert({ full_name_ar:name.trim(), classification:"employee" }).select("id").single();
   if(error) return toast("خطأ: "+error.message);
-  toast("أُضيف — اسحبه من الأعلى إلى مكانه في الخريطة"); await refreshAll(data.id);
+  if(team) await db.from("person_org_group_memberships").insert({ person_id:data.id, org_group_id:team.id });
+  toast("أُضيف الشخص"); await refreshAll(data.id);
 }
 async function addDeptFlow(){
   const name=prompt("اسم القسم / الفريق الجديد:"); if(!name||!name.trim())return;
   const slug=name.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^\w\-]/g,"")||("team"+Math.floor(Math.random()*1e6));
   const { data, error }=await db.from("org_groups").insert({ name_ar:name.trim(), slug, group_type:"team" }).select("slug").single();
   if(error) return toast("خطأ: "+error.message);
-  toast("أُضيف القسم — اسحبه من الأعلى إلى مكانه"); await refreshAll(data.slug);
+  toast("أُضيف القسم"); await refreshAll(data.slug);
 }
 
 let LAST = {};
 async function boot(keepId){
   try {
-    const [people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks, conns] = await Promise.all([
+    const [people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks] = await Promise.all([
       sb("people?deleted_at=is.null&select=*"),
       sb("org_groups?deleted_at=is.null&select=*"),
       sb("org_group_managers?select=*&order=display_order"),
@@ -561,9 +471,8 @@ async function boot(keepId){
       sb("responsibilities?select=id,person_id,description_ar,display_order&order=display_order"),
       sb("task_assignments?select=*"),
       sb("tasks?deleted_at=is.null&select=id,title,status,is_top_priority"),
-      sb("connections?select=*&order=created_at"),
     ]);
-    LAST = {people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks, conns};
+    LAST = {people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks};
     build({...LAST, keepId});
   } catch(e){
     document.getElementById("app").innerHTML = `<div class="state err">تعذّر تحميل البيانات.<br>${esc(e.message)}</div>`;
