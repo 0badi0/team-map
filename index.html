@@ -52,6 +52,18 @@
   .trunk{display:flex;flex-direction:column;align-items:center}
   .col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;position:relative}
   .row{display:flex;align-items:flex-start;justify-content:center;gap:12px;flex-wrap:wrap}
+  /* vertical, drag-reorderable people stack inside a department column */
+  .stack{display:flex;flex-direction:column;align-items:center;width:100%}
+  .drag-item{position:relative;display:flex;justify-content:center;align-items:center}
+  .drag-item + .drag-item{margin-top:38px}
+  .drag-item + .drag-item::before{content:"";position:absolute;left:50%;top:-32px;width:2px;height:26px;background:var(--line);transform:translateX(-50%)}
+  .drag-item + .drag-item::after{content:"";position:absolute;left:50%;top:-13px;width:8px;height:8px;border-right:2px solid var(--line);border-bottom:2px solid var(--line);transform:translate(-50%,0) rotate(45deg)}
+  .grip{position:absolute;inset-inline-start:-6px;top:-8px;z-index:3;cursor:grab;touch-action:none;user-select:none;
+    color:var(--muted);font-size:13px;line-height:1;background:var(--background);border:1px solid var(--border);border-radius:6px;padding:2px 4px}
+  .grip:hover{color:var(--accent);border-color:var(--accent)}
+  .grip:active{cursor:grabbing}
+  .drag-item.dragging{opacity:.55}
+  .drag-item.dragging .node{border-color:var(--accent);box-shadow:0 6px 18px rgba(0,0,0,.18)}
   .branches{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-top:24px}
   .branches::before{content:"";position:absolute;top:0;left:16.6%;right:16.6%;height:0;border-top:2px solid var(--line)}
   .branches .col::before{content:"";position:absolute;top:-24px;right:50%;width:2px;height:24px;background:var(--line);transform:translateX(50%)}
@@ -260,7 +272,7 @@ function renderDetail(id){
   host.querySelectorAll("[data-teamtoggle]").forEach(cb=>cb.onchange=async()=>{
     const gid=cb.dataset.teamtoggle;
     if(cb.checked){
-      const { error }=await db.from("person_org_group_memberships").insert({ person_id:d.dbId, org_group_id:gid });
+      const { error }=await db.from("person_org_group_memberships").insert({ person_id:d.dbId, org_group_id:gid, display_order:nextOrder(gid) });
       if(error){ cb.checked=false; return toast("خطأ: "+error.message); }
     } else {
       const { error }=await db.from("person_org_group_memberships").delete().eq("person_id",d.dbId).eq("org_group_id",gid);
@@ -421,18 +433,16 @@ function build(data){
   // ---- node builders ----
   const pNode = (id, kind="person") => nodeHtml(byId(id)?.full_name_ar ?? "?", kind, id);
   const gNode = (slug, kind="group") => { const g=groupBySlug.get(slug); return nodeHtml(g?.name_ar ?? slug, kind, slug); };
-  const mgmtMembers = (memberIdsByGroup.get(groupBySlug.get("management")?.id)||[]);
-  // people added to Media/Sales beyond the curated chain, appended so they show up
-  const mediaId = groupBySlug.get("media")?.id, salesId = groupBySlug.get("sales")?.id;
-  const mediaCurated = [P.ahmad,P.ahsan,P.haitham,P.mohammed];
-  const salesCurated = [P.sami,P.malek];
-  const mediaExtra = (memberIdsByGroup.get(mediaId)||[]).filter(id=>!mediaCurated.includes(id));
-  const salesExtra = (memberIdsByGroup.get(salesId)||[]).filter(id=>!salesCurated.includes(id));
+  const mgmtId = groupBySlug.get("management")?.id, mediaId = groupBySlug.get("media")?.id, salesId = groupBySlug.get("sales")?.id;
+  // each department renders its people as a vertical, drag-reorderable stack (top = most senior).
+  // members are already sorted by display_order (fetched with order=display_order).
+  const editing = canEdit();
+  const dragItem = (id, teamId) => `<div class="drag-item" data-person="${id}" data-team="${teamId}">${editing?`<span class="grip" data-grip title="اسحب للأعلى أو الأسفل">⠿</span>`:""}${pNode(id)}</div>`;
+  const peopleStack = (gid) => { const ids=memberIdsByGroup.get(gid)||[]; return `<div class="stack" data-team="${gid}">${ids.map(id=>dragItem(id,gid)).join("")||`<span class="empty-note">لا أعضاء بعد — أضِف شخصًا</span>`}</div>`; };
   // brand-new top-level teams (departments) become their own columns
   const knownTeams = ["management","media","sales"];
   const newTeams = groups.filter(g=>g.group_type==="team" && !knownTeams.includes(g.slug));
-  const teamCol = g => `<div class="col">${nodeHtml(g.name_ar,"label",g.slug)}<div class="stem-arrow"></div>
-      <div class="row">${(memberIdsByGroup.get(g.id)||[]).map(id=>pNode(id)).join("")||'<span class="empty-note">لا أعضاء بعد — أضِف شخصًا</span>'}</div></div>`;
+  const teamCol = g => `<div class="col">${nodeHtml(g.name_ar,"label",g.slug)}<div class="stem-arrow"></div>${peopleStack(g.id)}</div>`;
   const toolbar = canEdit() ? `<div class="toolbar"><button class="ebtn ebtn-sm" id="addPersonBtn">+ شخص</button><button class="ebtn ebtn-sm" id="addDeptBtn">+ قسم / فريق</button></div>` : "";
 
   const html = `
@@ -441,18 +451,10 @@ function build(data){
     ${toolbar}
     <div class="trunk">${nodeHtml("علي — صاحب الشركة","owner",P.ali)}<div class="stem-arrow"></div>${nodeHtml("Teams","label","teams")}</div>
     <div class="branches">
-      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>
-        <div class="row">${mgmtMembers.map(id=>pNode(id)).join("")}</div></div>
-      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>
-        ${pNode(P.ahmad)}<div class="stem-arrow"></div>${pNode(P.ahsan)}<div class="stem-arrow"></div>
-        <div class="row">${pNode(P.haitham)}${pNode(P.mohammed)}</div>
-        <div class="stem-arrow"></div>${gNode("freelance-editors")}
-        ${mediaExtra.length?`<div class="stem-arrow"></div><div class="row">${mediaExtra.map(id=>pNode(id)).join("")}</div>`:""}</div>
-      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>
-        <div class="row">${pNode(P.sami)}${pNode(P.malek)}</div>
-        <div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
-        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div>
-        ${salesExtra.length?`<div class="stem-arrow"></div><div class="row">${salesExtra.map(id=>pNode(id)).join("")}</div>`:""}</div>
+      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>${peopleStack(mgmtId)}</div>
+      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>${peopleStack(mediaId)}<div class="stem-arrow"></div>${gNode("freelance-editors")}</div>
+      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>${peopleStack(salesId)}<div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
+        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div></div>
       ${newTeams.map(teamCol).join("")}
     </div>
     <div class="more-hint">علاقات عابرة للفرق بالأسفل</div>
@@ -473,14 +475,58 @@ function build(data){
     if(!n.dataset.detail) return;
     n.addEventListener("click", ()=>renderDetail(n.dataset.detail));
   });
+  wireReorder();
   const ap=document.getElementById("addPersonBtn"); ap&&(ap.onclick=addPersonFlow);
   const ad=document.getElementById("addDeptBtn"); ad&&(ad.onclick=addDeptFlow);
   const first = (data.keepId && DETAILS[data.keepId]) ? data.keepId : DEFAULT_ID;
   renderDetail(first);
 }
 
+// ---- drag to reorder people up/down within a department column ----
+let DRAG=null;
+function wireReorder(){
+  document.querySelectorAll("[data-grip]").forEach(g=>{
+    g.addEventListener("pointerdown", onGripDown);
+  });
+}
+function onGripDown(e){
+  const item=e.target.closest(".drag-item"); if(!item) return;
+  const stack=item.closest(".stack"); if(!stack) return;
+  e.preventDefault(); e.stopPropagation();
+  DRAG={ item, stack, teamId:stack.dataset.team };
+  item.classList.add("dragging");
+  document.body.style.userSelect="none";
+  window.addEventListener("pointermove", onGripMove);
+  window.addEventListener("pointerup", onGripUp, { once:true });
+}
+function onGripMove(e){
+  if(!DRAG) return;
+  const { item, stack }=DRAG;
+  const y=e.clientY;
+  const others=[...stack.querySelectorAll(".drag-item")].filter(x=>x!==item);
+  let target=null;
+  for(const o of others){ const r=o.getBoundingClientRect(); if(y < r.top + r.height/2){ target=o; break; } }
+  if(target) stack.insertBefore(item, target); else stack.appendChild(item);
+}
+async function onGripUp(){
+  const d=DRAG; DRAG=null;
+  window.removeEventListener("pointermove", onGripMove);
+  document.body.style.userSelect="";
+  if(!d) return;
+  d.item.classList.remove("dragging");
+  const ids=[...d.stack.querySelectorAll(".drag-item")].map(x=>x.dataset.person);
+  const res=await Promise.all(ids.map((pid,i)=>
+    db.from("person_org_group_memberships").update({ display_order:i }).eq("person_id",pid).eq("org_group_id",d.teamId)));
+  const bad=res.find(r=>r.error);
+  if(bad){ toast("خطأ في الحفظ: "+bad.error.message); }
+  else toast("تم الترتيب");
+  await refreshKeep();
+}
+
 // team list for adding a person
 function teamList(groups){ return (groups||[]).filter(g=>g.group_type==="team"); }
+// next display_order for a group = bottom of the stack (so new people land at the bottom, then get dragged up)
+function nextOrder(gid){ const rows=(LAST.memberships||[]).filter(m=>m.org_group_id===gid); return rows.length?Math.max(...rows.map(m=>m.display_order??0))+1:0; }
 // add a person and place them in ONE OR MORE departments at once (checkbox modal)
 function addPersonFlow(){
   const teams=teamList(LAST.groups);
@@ -508,7 +554,7 @@ function addPersonFlow(){
     const { data, error }=await db.from("people").insert({ full_name_ar:name, classification:"employee" }).select("id").single();
     if(error) return toast("خطأ: "+error.message);
     if(chosen.length){
-      const { error:me }=await db.from("person_org_group_memberships").insert(chosen.map(gid=>({ person_id:data.id, org_group_id:gid })));
+      const { error:me }=await db.from("person_org_group_memberships").insert(chosen.map(gid=>({ person_id:data.id, org_group_id:gid, display_order:nextOrder(gid) })));
       if(me) return toast("خطأ: "+me.message);
     }
     close(); toast("أُضيف الشخص"); await refreshAll(data.id);
@@ -529,7 +575,7 @@ async function boot(keepId){
       sb("people?deleted_at=is.null&select=*"),
       sb("org_groups?deleted_at=is.null&select=*"),
       sb("org_group_managers?select=*&order=display_order"),
-      sb("person_org_group_memberships?select=*"),
+      sb("person_org_group_memberships?select=*&order=display_order"),
       sb("roles?select=*"),
       sb("person_roles?select=*"),
       sb("responsibilities?select=id,person_id,description_ar,display_order&order=display_order"),
