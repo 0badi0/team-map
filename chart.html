@@ -294,9 +294,20 @@ function renderDetail(id){
   });
   const dn=document.getElementById("delNode"); dn&&(dn.onclick=async()=>{
     if(!confirm("حذف هذا العنصر؟"))return;
-    const t=d.kind==="person"?"people":"org_groups";
-    await db.from(t).update({deleted_at:new Date().toISOString()}).eq("id",d.dbId);
-    await refreshAll();
+    if(d.kind==="person"){
+      // remove the person's links first so no blank "?" card is left behind, then soft-delete
+      await db.from("person_org_group_memberships").delete().eq("person_id",d.dbId);
+      await db.from("org_group_managers").delete().eq("person_id",d.dbId);
+      await db.from("task_assignments").delete().eq("person_id",d.dbId);
+      const { error }=await db.from("people").update({deleted_at:new Date().toISOString()}).eq("id",d.dbId);
+      if(error) return toast("تعذّر الحذف: "+error.message);
+    } else {
+      await db.from("person_org_group_memberships").delete().eq("org_group_id",d.dbId);
+      await db.from("org_group_managers").delete().eq("org_group_id",d.dbId);
+      const { error }=await db.from("org_groups").update({deleted_at:new Date().toISOString()}).eq("id",d.dbId);
+      if(error) return toast("تعذّر الحذف: "+error.message);
+    }
+    toast("تم الحذف"); await refreshAll();
   });
 }
 
@@ -400,7 +411,9 @@ function build(data){
     lm.set(m.level||0, arr); levelMapByGroup.set(m.org_group_id, lm);
   });
   const levelRows = gid => { const lm=levelMapByGroup.get(gid); if(!lm) return [];
-    return [...lm.keys()].sort((a,b)=>a-b).map(lv=>lm.get(lv).sort((a,b)=>a.order-b.order).map(x=>x.id)); };
+    return [...lm.keys()].sort((a,b)=>a-b)
+      .map(lv=>lm.get(lv).sort((a,b)=>a.order-b.order).map(x=>x.id).filter(id=>personById.has(id)))
+      .filter(row=>row.length); };
   const tasksByPerson = new Map();
   const taskById = new Map(data.tasks.map(t=>[t.id,t]));
   data.assignments.forEach(a=>{ const t=taskById.get(a.task_id); if(!t)return; const arr=tasksByPerson.get(a.person_id)||[]; arr.push({id:t.id,title:t.title,status:t.status,isTopPriority:t.is_top_priority,createdAt:t.created_at}); tasksByPerson.set(a.person_id,arr); });
