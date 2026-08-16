@@ -52,6 +52,17 @@
   .trunk{display:flex;flex-direction:column;align-items:center}
   .col{display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;position:relative}
   .row{display:flex;align-items:flex-start;justify-content:center;gap:12px;flex-wrap:wrap}
+  /* levels = stacked rows of peers inside a department; drag a person between levels */
+  .levels{display:flex;flex-direction:column;align-items:center;width:100%}
+  .lvl{width:100%;display:flex;justify-content:center;border-radius:12px;padding:5px 0;transition:background .1s,outline-color .1s;outline:2px dashed transparent;outline-offset:3px}
+  .lvl-target{outline-color:var(--accent);background:rgba(37,84,235,.06)}
+  .pcard{position:relative;display:flex;align-items:center;justify-content:center}
+  .pcard.dragging{opacity:.45}
+  .grip{position:absolute;inset-inline-start:-7px;top:-8px;z-index:4;cursor:grab;touch-action:none;user-select:none;
+    color:var(--muted);font-size:12px;line-height:1;background:var(--background);border:1px solid var(--border);border-radius:6px;padding:2px 4px}
+  .grip:hover{color:var(--accent);border-color:var(--accent)}
+  .grip:active{cursor:grabbing}
+  #dropInd{position:fixed;height:4px;background:var(--accent);border-radius:3px;z-index:80;pointer-events:none;display:none;box-shadow:0 0 0 3px rgba(37,84,235,.2)}
   .branches{position:relative;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding-top:24px}
   .branches::before{content:"";position:absolute;top:0;left:16.6%;right:16.6%;height:0;border-top:2px solid var(--line)}
   .branches .col::before{content:"";position:absolute;top:-24px;right:50%;width:2px;height:24px;background:var(--line);transform:translateX(50%)}
@@ -239,12 +250,6 @@ function renderDetail(id){
   const deptBlock = (ed && d.kind==="person" && teamsAll.length)
     ? `<div class="tasks-block"><div class="tasks-title">الأقسام / الفرق <span style="font-weight:500;color:var(--faint)">(ضع الشخص في أكثر من قسم ليظهر في كلٍّ منها)</span></div>
         <div class="tck-list">${teamsAll.map(g=>`<label class="tck"><input type="checkbox" data-teamtoggle="${g.id}" ${(d.teamIds||[]).includes(g.id)?"checked":""}> ${esc(g.name_ar)}</label>`).join("")}</div></div>` : "";
-  // GROUP: manage the team's manager(s) — add a co-manager or remove one
-  const mgrBlock = (ed && d.kind==="group")
-    ? `<div class="tasks-block"><div class="tasks-title">مدراء الفريق <span style="font-weight:500;color:var(--faint)">(يظهرون جنبًا إلى جنب في الأعلى)</span> <button class="ebtn ebtn-sm" id="addMgrBtn" style="float:inline-end">+ إضافة مدير</button></div>
-        ${(d.managerRows&&d.managerRows.length)
-          ? `<ul class="detail-list">${d.managerRows.map(m=>`<li>${esc(m.name)} <button class="del-x" data-delmgr="${m.id}">×</button></li>`).join("")}</ul>`
-          : `<p class="empty-note">لا مدير محدد بعد.</p>`}</div>` : "";
   const editRow = ed
     ? `<div class="edit-row">
         ${d.editHref?`<a class="ebtn ebtn-sm" href="${d.editHref}">تعديل الحقول ↗</a>`:""}
@@ -258,7 +263,7 @@ function renderDetail(id){
     <div class="detail-stats">
       <div><b>الفريق:</b> <span>${esc(d.team)}</span></div>
       <div><b>الإدارة:</b> <span>${esc(d.manager)}</span></div>
-    </div>${respHtml}${mgrBlock}${dutiesBlock}${deptBlock}${editRow}`;
+    </div>${respHtml}${dutiesBlock}${deptBlock}${editRow}`;
   host.scrollIntoView({behavior:"smooth",block:"nearest"});
   // wire edit controls
   host.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>openTaskCard(b.dataset.task, id));
@@ -278,13 +283,6 @@ function renderDetail(id){
     e.stopPropagation();
     if(!confirm("حذف هذا البند؟"))return;
     await db.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",b.dataset.deltask);
-    await refreshKeep();
-  });
-  const amb=document.getElementById("addMgrBtn"); amb&&(amb.onclick=()=>addManagerFlow(d.dbId));
-  host.querySelectorAll("[data-delmgr]").forEach(b=>b.onclick=async()=>{
-    if(!confirm("إزالة هذا المدير من الفريق؟"))return;
-    const { error }=await db.from("org_group_managers").delete().eq("org_group_id",d.dbId).eq("person_id",b.dataset.delmgr);
-    if(error) return toast("خطأ: "+error.message);
     await refreshKeep();
   });
   const at=document.getElementById("addTask"); at&&(at.onclick=async()=>{
@@ -394,6 +392,15 @@ function build(data){
   });
   const memberIdsByGroup = new Map();
   data.memberships.forEach(m=>{ const a=memberIdsByGroup.get(m.org_group_id)||[]; a.push(m.person_id); memberIdsByGroup.set(m.org_group_id,a); });
+  // members grouped into LEVELS (each level = one row of peers, side by side), sorted within a level by display_order
+  const levelMapByGroup = new Map(); // gid -> Map(level -> [{id,order}])
+  data.memberships.forEach(m=>{
+    const lm=levelMapByGroup.get(m.org_group_id)||new Map();
+    const arr=lm.get(m.level||0)||[]; arr.push({id:m.person_id, order:m.display_order??0});
+    lm.set(m.level||0, arr); levelMapByGroup.set(m.org_group_id, lm);
+  });
+  const levelRows = gid => { const lm=levelMapByGroup.get(gid); if(!lm) return [];
+    return [...lm.keys()].sort((a,b)=>a-b).map(lv=>lm.get(lv).sort((a,b)=>a.order-b.order).map(x=>x.id)); };
   const tasksByPerson = new Map();
   const taskById = new Map(data.tasks.map(t=>[t.id,t]));
   data.assignments.forEach(a=>{ const t=taskById.get(a.task_id); if(!t)return; const arr=tasksByPerson.get(a.person_id)||[]; arr.push({id:t.id,title:t.title,status:t.status,isTopPriority:t.is_top_priority,createdAt:t.created_at}); tasksByPerson.set(a.person_id,arr); });
@@ -426,9 +433,7 @@ function build(data){
       kind:"group", dbId:g.id, editHref:`./admin.html#/teams/${g.id}`,
       name: g.name_ar, subtitle: g.description ?? "—", badge:"group", badgeLabel:typeLabel,
       team: g.parent_group_id ? (groupById.get(g.parent_group_id)?.name_ar ?? "—") : "Teams",
-      manager: formatManagerList(managersByGroup.get(g.id)||[]) || "—",
-      isTeam: g.group_type==="team",
-      managerRows: (managerIdsByGroup.get(g.id)||[]).map(id=>({id, name:nameOf(id)})),
+      manager: formatManagerList(g.group_type==="team" ? (levelRows(g.id)[0]||[]).map(nameOf) : (managersByGroup.get(g.id)||[])) || "—",
       resp: [], emptyNote:"لم تُحدد التفاصيل بعد.",
     };
   });
@@ -440,22 +445,20 @@ function build(data){
   // ---- node builders ----
   const pNode = (id, kind="person") => nodeHtml(byId(id)?.full_name_ar ?? "?", kind, id);
   const gNode = (slug, kind="group") => { const g=groupBySlug.get(slug); return nodeHtml(g?.name_ar ?? slug, kind, slug); };
-  const mgmtMembers = (memberIdsByGroup.get(groupBySlug.get("management")?.id)||[]);
-  const mediaId = groupBySlug.get("media")?.id, salesId = groupBySlug.get("sales")?.id;
-  // a department's manager(s) render side by side at the top (data-driven from org_group_managers)
-  const mediaMgrs = managerIdsByGroup.get(mediaId)?.length ? managerIdsByGroup.get(mediaId) : [P.ahmad];
-  const salesMgrs = managerIdsByGroup.get(salesId)?.length ? managerIdsByGroup.get(salesId) : [P.sami,P.malek];
-  const mgrRow = (teamId, ids) => `<div class="row">${ids.map(id=>pNode(id)).join("")}${canEdit()?`<button class="ebtn ebtn-sm add-mgr" data-team="${teamId}" title="أضف مديرًا مشاركًا يظهر بجانبه">+ مدير</button>`:""}</div>`;
-  // people added beyond the curated chain / managers, appended so they show up
-  const mediaCurated = [P.ahmad,P.ahsan,P.haitham,P.mohammed];
-  const salesCurated = [P.sami,P.malek];
-  const mediaExtra = (memberIdsByGroup.get(mediaId)||[]).filter(id=>!mediaCurated.includes(id) && !mediaMgrs.includes(id));
-  const salesExtra = (memberIdsByGroup.get(salesId)||[]).filter(id=>!salesCurated.includes(id) && !salesMgrs.includes(id));
+  const mgmtId = groupBySlug.get("management")?.id, mediaId = groupBySlug.get("media")?.id, salesId = groupBySlug.get("sales")?.id;
+  const editing = canEdit();
+  // a person is a draggable card; drag it to any LEVEL (row of peers) or into the gap between levels to make a new level
+  const pCard = (id, teamId) => `<div class="pcard" data-person="${id}" data-team="${teamId}">${editing?`<span class="grip" data-grip title="اسحب لتغيير مستواه ومكانه">⠿</span>`:""}${pNode(id)}</div>`;
+  // render a department's people as stacked LEVELS (top level = managers), peers side by side within a level
+  const deptLevels = (teamId) => {
+    const rows = levelRows(teamId);
+    if(!rows.length) return `<div class="levels" data-team="${teamId}"><span class="empty-note">لا أعضاء بعد — أضِف شخصًا</span></div>`;
+    return `<div class="levels" data-team="${teamId}">${rows.map((ids,i)=>`${i>0?`<div class="stem-arrow"></div>`:""}<div class="lvl" data-level="${i}"><div class="row">${ids.map(id=>pCard(id,teamId)).join("")}</div></div>`).join("")}</div>`;
+  };
   // brand-new top-level teams (departments) become their own columns
   const knownTeams = ["management","media","sales"];
   const newTeams = groups.filter(g=>g.group_type==="team" && !knownTeams.includes(g.slug));
-  const teamCol = g => `<div class="col">${nodeHtml(g.name_ar,"label",g.slug)}<div class="stem-arrow"></div>
-      <div class="row">${(memberIdsByGroup.get(g.id)||[]).map(id=>pNode(id)).join("")||'<span class="empty-note">لا أعضاء بعد — أضِف شخصًا</span>'}</div></div>`;
+  const teamCol = g => `<div class="col">${nodeHtml(g.name_ar,"label",g.slug)}<div class="stem-arrow"></div>${deptLevels(g.id)}</div>`;
   const toolbar = canEdit() ? `<div class="toolbar"><button class="ebtn ebtn-sm" id="addPersonBtn">+ شخص</button><button class="ebtn ebtn-sm" id="addDeptBtn">+ قسم / فريق</button></div>` : "";
 
   const html = `
@@ -464,18 +467,10 @@ function build(data){
     ${toolbar}
     <div class="trunk">${nodeHtml("علي — صاحب الشركة","owner",P.ali)}<div class="stem-arrow"></div>${nodeHtml("Teams","label","teams")}</div>
     <div class="branches">
-      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>
-        <div class="row">${mgmtMembers.map(id=>pNode(id)).join("")}</div></div>
-      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>
-        ${mgrRow(mediaId, mediaMgrs)}<div class="stem-arrow"></div>${pNode(P.ahsan)}<div class="stem-arrow"></div>
-        <div class="row">${pNode(P.haitham)}${pNode(P.mohammed)}</div>
-        <div class="stem-arrow"></div>${gNode("freelance-editors")}
-        ${mediaExtra.length?`<div class="stem-arrow"></div><div class="row">${mediaExtra.map(id=>pNode(id)).join("")}</div>`:""}</div>
-      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>
-        ${mgrRow(salesId, salesMgrs)}
-        <div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
-        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div>
-        ${salesExtra.length?`<div class="stem-arrow"></div><div class="row">${salesExtra.map(id=>pNode(id)).join("")}</div>`:""}</div>
+      <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>${deptLevels(mgmtId)}</div>
+      <div class="col">${nodeHtml("Media","label","media")}<div class="stem-arrow"></div>${deptLevels(mediaId)}<div class="stem-arrow"></div>${gNode("freelance-editors")}</div>
+      <div class="col">${nodeHtml("Sales","label","sales")}<div class="stem-arrow"></div>${deptLevels(salesId)}<div class="stem-arrow"></div>${gNode("funnel-engineering","label")}<div class="stem-arrow"></div>
+        <div class="row">${gNode("setters")}${gNode("closers")}${gNode("marketing")}</div></div>
       ${newTeams.map(teamCol).join("")}
     </div>
     <div class="more-hint">علاقات عابرة للفرق بالأسفل</div>
@@ -496,7 +491,7 @@ function build(data){
     if(!n.dataset.detail) return;
     n.addEventListener("click", ()=>renderDetail(n.dataset.detail));
   });
-  document.querySelectorAll(".add-mgr").forEach(b=>b.onclick=(e)=>{ e.stopPropagation(); addManagerFlow(b.dataset.team); });
+  wireDrag();
   const ap=document.getElementById("addPersonBtn"); ap&&(ap.onclick=addPersonFlow);
   const ad=document.getElementById("addDeptBtn"); ad&&(ad.onclick=addDeptFlow);
   const first = (data.keepId && DETAILS[data.keepId]) ? data.keepId : DEFAULT_ID;
@@ -532,56 +527,88 @@ function addPersonFlow(){
     const { data, error }=await db.from("people").insert({ full_name_ar:name, classification:"employee" }).select("id").single();
     if(error) return toast("خطأ: "+error.message);
     if(chosen.length){
-      const { error:me }=await db.from("person_org_group_memberships").insert(chosen.map(gid=>({ person_id:data.id, org_group_id:gid })));
+      const { error:me }=await db.from("person_org_group_memberships").insert(chosen.map(gid=>({ person_id:data.id, org_group_id:gid, level:nextLevel(gid) })));
       if(me) return toast("خطأ: "+me.message);
     }
-    close(); toast("أُضيف الشخص"); await refreshAll(data.id);
+    close(); toast("أُضيف الشخص — اسحبه إلى مكانه"); await refreshAll(data.id);
   };
 }
-// next manager slot order for a team (co-managers appended to the right)
-function nextMgrOrder(teamId){ const rows=(LAST.managers||[]).filter(m=>m.org_group_id===teamId); return rows.length?Math.max(...rows.map(m=>m.display_order??0))+1:0; }
-// add a co-manager to a team — existing person or a brand-new one; appears beside the current manager(s)
-function addManagerFlow(teamId){
-  const team=(LAST.groups||[]).find(g=>g.id===teamId); if(!team) return;
-  const currentMgrIds=new Set((LAST.managers||[]).filter(m=>m.org_group_id===teamId).map(m=>m.person_id));
-  const options=(LAST.people||[]).filter(p=>!p.deleted_at && !currentMgrIds.has(p.id))
-    .map(p=>`<option value="${p.id}">${esc(p.full_name_ar)}</option>`).join("");
-  const wrap=document.createElement("div");
-  wrap.className="modal-bg open";
-  wrap.innerHTML=`<div class="modal">
-      <h3 style="margin:0 0 6px;font-size:18px;font-weight:800">إضافة مدير مشارك</h3>
-      <p class="empty-note" style="margin:0 0 16px">لفريق ${esc(team.name_ar)} — سيظهر بجانب المدير الحالي في الأعلى</p>
-      <label class="mfield">اختر شخصًا موجودًا
-        <select id="mgrPick">${options||`<option value="">لا يوجد أشخاص آخرون</option>`}</select></label>
-      <button class="ebtn ebtn-primary" id="mgrPickAdd" style="width:100%;margin-top:10px">أضِفه كمدير</button>
-      <div class="tasks-title" style="margin:18px 0 6px">أو أضِف شخصًا جديدًا كمدير</div>
-      <label class="mfield"><input id="mgrNew" type="text" placeholder="اسم المدير الجديد"></label>
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <button class="ebtn ebtn-primary" id="mgrNewAdd" style="flex:1">إضافة جديد</button>
-        <button class="ebtn" id="mgrCancel">إغلاق</button>
-      </div></div>`;
-  document.body.appendChild(wrap);
-  const close=()=>wrap.remove();
-  wrap.querySelector("#mgrCancel").onclick=close;
-  wrap.addEventListener("click",e=>{ if(e.target===wrap) close(); });
-  wrap.querySelector("#mgrPickAdd").onclick=async()=>{
-    const pid=wrap.querySelector("#mgrPick").value; if(!pid) return toast("اختر شخصًا");
-    const { error }=await db.from("org_group_managers").insert({ org_group_id:teamId, person_id:pid, display_order:nextMgrOrder(teamId) });
-    if(error) return toast("خطأ: "+error.message);
-    close(); toast("أُضيف المدير"); await refreshAll(pid);
-  };
-  const nn=wrap.querySelector("#mgrNew");
-  nn.addEventListener("keydown",e=>{ if(e.key==="Enter") wrap.querySelector("#mgrNewAdd").click(); });
-  wrap.querySelector("#mgrNewAdd").onclick=async()=>{
-    const name=nn.value.trim(); if(!name) return toast("أدخل الاسم");
-    const { data, error }=await db.from("people").insert({ full_name_ar:name, classification:"employee" }).select("id").single();
-    if(error) return toast("خطأ: "+error.message);
-    await db.from("person_org_group_memberships").insert({ person_id:data.id, org_group_id:teamId });
-    const { error:me }=await db.from("org_group_managers").insert({ org_group_id:teamId, person_id:data.id, display_order:nextMgrOrder(teamId) });
-    if(me) return toast("خطأ: "+me.message);
-    close(); toast("أُضيف المدير"); await refreshAll(data.id);
-  };
+// next (bottom) level for a team so a new person appears as a fresh row, then gets dragged into place
+function nextLevel(gid){ const rows=(LAST.memberships||[]).filter(m=>m.org_group_id===gid); return rows.length?Math.max(...rows.map(m=>m.level??0))+1:0; }
+
+// ================= DRAG A PERSON TO ANY LEVEL / POSITION IN A DEPARTMENT =================
+let DRAG=null, DROPIND=null;
+function ensureDropInd(){ if(!DROPIND){ DROPIND=document.createElement("div"); DROPIND.id="dropInd"; document.body.appendChild(DROPIND); } return DROPIND; }
+function wireDrag(){ document.querySelectorAll(".pcard [data-grip]").forEach(g=>g.addEventListener("pointerdown", dragStart)); }
+function dragStart(e){
+  const card=e.target.closest(".pcard"); if(!card) return;
+  const levelsEl=card.closest(".levels"); if(!levelsEl) return;
+  e.preventDefault(); e.stopPropagation();
+  DRAG={ card, levelsEl, teamId:levelsEl.dataset.team, target:null };
+  card.classList.add("dragging");
+  document.body.style.userSelect="none";
+  window.addEventListener("pointermove", dragMove);
+  window.addEventListener("pointerup", dragEnd, { once:true });
 }
+function dragMove(e){
+  if(!DRAG) return;
+  DRAG.target = computeTarget(DRAG.levelsEl, e.clientX, e.clientY, DRAG.card);
+  paintTarget(DRAG.levelsEl, DRAG.target);
+}
+function computeTarget(levelsEl, x, y, card){
+  const lvls=[...levelsEl.querySelectorAll(".lvl")];
+  for(let i=0;i<lvls.length;i++){
+    const r=lvls[i].getBoundingClientRect();
+    if(y>=r.top-6 && y<=r.bottom+6){
+      const cards=[...lvls[i].querySelectorAll(".pcard")].filter(c=>c!==card);
+      let idx=cards.length;
+      for(let j=0;j<cards.length;j++){ const cr=cards[j].getBoundingClientRect(); if(x > cr.left+cr.width/2){ idx=j; break; } }
+      return { type:"peer", level:i, index:idx };
+    }
+  }
+  let pos=lvls.length;
+  for(let i=0;i<lvls.length;i++){ const r=lvls[i].getBoundingClientRect(); if(y < (r.top+r.bottom)/2){ pos=i; break; } }
+  return { type:"newlevel", position:pos };
+}
+function paintTarget(levelsEl, t){
+  levelsEl.querySelectorAll(".lvl").forEach(l=>l.classList.remove("lvl-target"));
+  const ind=ensureDropInd(); ind.style.display="none";
+  if(!t) return;
+  const lvls=[...levelsEl.querySelectorAll(".lvl")];
+  if(t.type==="peer"){ lvls[t.level]&&lvls[t.level].classList.add("lvl-target"); return; }
+  const colRect=levelsEl.getBoundingClientRect();
+  let top;
+  if(t.position<=0){ top = (lvls[0]?lvls[0].getBoundingClientRect().top:colRect.top)-6; }
+  else if(t.position>=lvls.length){ top = (lvls[lvls.length-1]?lvls[lvls.length-1].getBoundingClientRect().bottom:colRect.bottom)+4; }
+  else { const a=lvls[t.position-1].getBoundingClientRect(), b=lvls[t.position].getBoundingClientRect(); top=(a.bottom+b.top)/2; }
+  ind.style.display="block"; ind.style.position="fixed";
+  ind.style.left=colRect.left+"px"; ind.style.width=colRect.width+"px"; ind.style.top=top+"px";
+}
+async function dragEnd(){
+  const d=DRAG; DRAG=null;
+  window.removeEventListener("pointermove", dragMove);
+  document.body.style.userSelect="";
+  if(DROPIND) DROPIND.style.display="none";
+  if(!d) return;
+  d.card.classList.remove("dragging");
+  d.levelsEl.querySelectorAll(".lvl").forEach(l=>l.classList.remove("lvl-target"));
+  const t=d.target; if(!t) return;
+  const pid=d.card.dataset.person, teamId=d.teamId;
+  // read current arrangement from the DOM, apply the move, renumber, persist
+  let lvls=[...d.levelsEl.querySelectorAll(".lvl")].map(l=>[...l.querySelectorAll(".pcard")].map(c=>c.dataset.person));
+  lvls.forEach(lv=>{ const i=lv.indexOf(pid); if(i>=0) lv.splice(i,1); });
+  if(t.type==="peer"){ (lvls[t.level]=lvls[t.level]||[]).splice(t.index,0,pid); }
+  else { lvls.splice(t.position,0,[pid]); }
+  lvls=lvls.filter(lv=>lv.length);
+  const updates=[];
+  lvls.forEach((lv,li)=>lv.forEach((personId,oi)=>updates.push(
+    db.from("person_org_group_memberships").update({ level:li, display_order:oi }).eq("person_id",personId).eq("org_group_id",teamId))));
+  const res=await Promise.all(updates);
+  const bad=res.find(r=>r.error);
+  if(bad) toast("خطأ في الحفظ: "+bad.error.message); else toast("تم النقل");
+  await refreshKeep();
+}
+// =========================================================================================
 async function addDeptFlow(){
   const name=prompt("اسم القسم / الفريق الجديد:"); if(!name||!name.trim())return;
   const slug=name.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^\w\-]/g,"")||("team"+Math.floor(Math.random()*1e6));
