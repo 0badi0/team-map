@@ -323,13 +323,11 @@ function renderDetail(id){
   const dutiesBlock = isPerson
     ? `<div class="tasks-block"><div class="tasks-title">ماذا يعمل — المهام والمسؤوليات ${ed?`<button class="ebtn ebtn-sm" id="addTask" style="float:inline-end">+ إضافة بند</button>`:""}</div>
         <p class="duties-hint">اضغط على أي بند لفتحه وإضافة الروابط والمستندات والملفات.</p>${dutyItems}</div>` : "";
-  // PERSON: contract & official documents (files download only when logged in; links open externally)
+  // PERSON: two attachment boxes — the contract, and general work files/links. Both download only when logged in.
   const contractBlock = isPerson
-    ? `<div class="tasks-block"><div class="tasks-title">📄 العقد والمستندات الرسمية</div>
-        <p class="duties-hint">عقد هذا الشخص ومستنداته — يمكن للفريق فتحها بعد تسجيل الدخول.</p>
-        <div id="contractBox"><p class="empty-note">جارٍ التحميل…</p></div>
-        ${ed?`<div class="addbar"><input id="cUrl" placeholder="رابط العقد (Google Drive / رابط PDF)…"><button class="ebtn ebtn-sm" id="cLinkAdd">إضافة رابط</button></div>
-          <div style="margin-top:10px"><label class="ebtn ebtn-sm" for="cUp" style="cursor:pointer">⬆️ رفع ملف العقد (PDF / Word — حتى 10 ميجابايت)</label><input type="file" id="cUp" style="display:none"><span class="empty-note" id="cMsg" style="margin-inline-start:8px"></span></div>`:""}</div>` : "";
+    ? attSection("contract","📄","العقد والمستندات الرسمية","عقد هذا الشخص ومستنداته الرسمية — يفتحها الفريق بعد تسجيل الدخول.", ed)
+      + attSection("document","📎","ملفات ومستندات إضافية","أي ملفات أو روابط متعلقة بالعمل (مجلد Drive، PDF…). اكتب اسمًا ثم أضِف الرابط، أو ارفع ملفًا.", ed)
+    : "";
   const teamsAll = teamList(LAST.groups);
   const deptBlock = (ed && d.kind==="person" && teamsAll.length)
     ? `<div class="tasks-block"><div class="tasks-title">الأقسام / الفرق <span style="font-weight:500;color:var(--faint)">(ضع الشخص في أكثر من قسم ليظهر في كلٍّ منها)</span></div>
@@ -351,7 +349,7 @@ function renderDetail(id){
   host.scrollIntoView({behavior:"smooth",block:"nearest"});
   // wire edit controls
   host.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>openTaskCard(b.dataset.task, id));
-  if(isPerson) wireContracts(d.dbId, ed);
+  if(isPerson){ wireAttachments(d.dbId, ed, "contract"); wireAttachments(d.dbId, ed, "document"); }
   if(!ed) return;
   host.querySelectorAll("[data-teamtoggle]").forEach(cb=>cb.onchange=async()=>{
     const gid=cb.dataset.teamtoggle;
@@ -468,49 +466,65 @@ async function openTaskCard(taskId, backId){
   });
 }
 
-// per-person CONTRACT & documents (files/links with person_id). Files download via signed URL (login required).
-async function wireContracts(personId, ed){
-  const box=document.getElementById("contractBox"); if(!box) return;
+// A reusable per-person attachment box (files + titled links). category = 'contract' or 'document'.
+function attSection(category, icon, title, hint, ed){
+  return `<div class="tasks-block att-section" data-cat="${category}">
+      <div class="tasks-title">${icon} ${esc(title)}</div>
+      <p class="duties-hint">${esc(hint)}</p>
+      <div class="att-box"><p class="empty-note">جارٍ التحميل…</p></div>
+      ${ed?`<div class="addbar">
+          <input class="att-title" placeholder="الاسم / العنوان (اختياري)">
+          <input class="att-url" placeholder="الرابط https://…">
+          <button class="ebtn ebtn-sm att-linkadd">إضافة رابط</button>
+        </div>
+        <div style="margin-top:10px"><label class="ebtn ebtn-sm att-uplabel">⬆️ رفع ملف (حتى 10 ميجابايت)<input type="file" class="att-file" style="display:none"></label><span class="empty-note att-msg" style="margin-inline-start:8px"></span></div>`:""}
+    </div>`;
+}
+// Files download via signed URL (login required); link metadata is public.
+async function wireAttachments(personId, ed, category){
+  const sec=document.querySelector(`.att-section[data-cat="${category}"]`); if(!sec) return;
+  const box=sec.querySelector(".att-box"); if(!box) return;
   const [links,files]=await Promise.all([
-    db.from("links").select("*").eq("person_id",personId).is("deleted_at",null).then(r=>r.data||[]),
-    db.from("files").select("*").eq("person_id",personId).is("deleted_at",null).then(r=>r.data||[]),
+    db.from("links").select("*").eq("person_id",personId).eq("category",category).is("deleted_at",null).then(r=>r.data||[]),
+    db.from("files").select("*").eq("person_id",personId).eq("category",category).is("deleted_at",null).then(r=>r.data||[]),
   ]);
   const rows=[
-    ...files.map(f=>`<div class="doc-row"><a data-cfile="${esc(f.storage_path)}">📄 ${esc(f.original_filename)}</a>${ed?`<button class="del-x" data-delcfile="${f.id}" data-path="${esc(f.storage_path)}">×</button>`:""}</div>`),
-    ...links.map(l=>`<div class="doc-row"><a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.label||l.url)}</a>${ed?`<button class="del-x" data-delclink="${l.id}">×</button>`:""}</div>`),
+    ...files.map(f=>`<div class="doc-row"><a data-af="${esc(f.storage_path)}">📄 ${esc(f.original_filename)}</a>${ed?`<button class="del-x" data-delaf="${f.id}" data-path="${esc(f.storage_path)}">×</button>`:""}</div>`),
+    ...links.map(l=>`<div class="doc-row"><a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.label||l.url)}</a>${ed?`<button class="del-x" data-delal="${l.id}">×</button>`:""}</div>`),
   ];
-  box.innerHTML = rows.length ? rows.join("") : `<p class="empty-note">لا يوجد عقد بعد.${ed?" ارفع ملفًا أو أضف رابطًا بالأسفل.":""}</p>`;
-  box.querySelectorAll("[data-cfile]").forEach(a=>a.onclick=async()=>{
-    const { data, error }=await db.storage.from("task-files").createSignedUrl(a.dataset.cfile,120);
-    if(error||!data) return toast("فتح العقد يتطلب تسجيل الدخول");
-    window.open(data.signedUrl,"_blank");
+  box.innerHTML = rows.length ? rows.join("") : `<p class="empty-note">لا يوجد شيء بعد.${ed?" أضِف رابطًا أو ارفع ملفًا بالأسفل.":""}</p>`;
+  box.querySelectorAll("[data-af]").forEach(a=>a.onclick=async()=>{
+    const { data, error }=await db.storage.from("task-files").createSignedUrl(a.dataset.af,120);
+    if(error||!data) return toast("الفتح يتطلب تسجيل الدخول"); window.open(data.signedUrl,"_blank");
   });
   if(!ed) return;
-  box.querySelectorAll("[data-delclink]").forEach(b=>b.onclick=async()=>{
+  box.querySelectorAll("[data-delal]").forEach(b=>b.onclick=async()=>{
     if(!(await uiConfirm("حذف هذا الرابط؟")))return;
-    await db.from("links").delete().eq("id",b.dataset.delclink); toast("حُذف"); wireContracts(personId,ed);
+    await db.from("links").delete().eq("id",b.dataset.delal); toast("حُذف"); wireAttachments(personId,ed,category);
   });
-  box.querySelectorAll("[data-delcfile]").forEach(b=>b.onclick=async()=>{
-    if(!(await uiConfirm("حذف ملف العقد؟")))return;
+  box.querySelectorAll("[data-delaf]").forEach(b=>b.onclick=async()=>{
+    if(!(await uiConfirm("حذف هذا الملف؟")))return;
     await db.storage.from("task-files").remove([b.dataset.path]);
-    await db.from("files").delete().eq("id",b.dataset.delcfile); toast("حُذف"); wireContracts(personId,ed);
+    await db.from("files").delete().eq("id",b.dataset.delaf); toast("حُذف"); wireAttachments(personId,ed,category);
   });
-  const la=document.getElementById("cLinkAdd"); la&&(la.onclick=async()=>{
-    const inp=document.getElementById("cUrl"); const url=inp.value.trim(); if(!url) return toast("أدخل رابطًا");
+  const la=sec.querySelector(".att-linkadd"); la&&(la.onclick=async()=>{
+    const urlEl=sec.querySelector(".att-url"), titleEl=sec.querySelector(".att-title");
+    const url=urlEl.value.trim(); if(!url) return toast("أدخل رابطًا");
+    const label=titleEl.value.trim()||null;
     let type="other"; if(url.includes("drive.google"))type="drive"; else if(url.includes("notion."))type="notion";
-    const { error }=await db.from("links").insert({ person_id:personId, url, link_type:type });
-    if(error) return toast("خطأ: "+error.message); inp.value=""; toast("أُضيف الرابط"); wireContracts(personId,ed);
+    const { error }=await db.from("links").insert({ person_id:personId, category, url, label, link_type:type });
+    if(error) return toast("خطأ: "+error.message);
+    urlEl.value=""; titleEl.value=""; toast("أُضيف الرابط"); wireAttachments(personId,ed,category);
   });
-  const up=document.getElementById("cUp"); up&&(up.onchange=async()=>{
-    const f=up.files[0]; if(!f) return;
-    if(f.size>10*1024*1024) return toast("الملف أكبر من 10 ميجابايت");
-    const msg=document.getElementById("cMsg"); if(msg) msg.textContent="جارٍ الرفع…";
-    const path=`contracts/${personId}/${crypto.randomUUID()}-${f.name}`;
+  const fi=sec.querySelector(".att-file"); fi&&(fi.onchange=async()=>{
+    const f=fi.files[0]; if(!f) return; if(f.size>10*1024*1024) return toast("الملف أكبر من 10 ميجابايت");
+    const msg=sec.querySelector(".att-msg"); if(msg) msg.textContent="جارٍ الرفع…";
+    const path=`${category}/${personId}/${crypto.randomUUID()}-${f.name}`;
     const { error:ue }=await db.storage.from("task-files").upload(path,f);
     if(ue){ if(msg) msg.textContent=""; return toast("خطأ بالرفع: "+ue.message); }
-    const { error }=await db.from("files").insert({ person_id:personId, storage_path:path, original_filename:f.name, mime_type:f.type||null, size_bytes:f.size });
+    const { error }=await db.from("files").insert({ person_id:personId, category, storage_path:path, original_filename:f.name, mime_type:f.type||null, size_bytes:f.size });
     if(error){ if(msg) msg.textContent=""; return toast("خطأ: "+error.message); }
-    if(msg) msg.textContent=""; toast("أُضيف العقد"); wireContracts(personId,ed);
+    if(msg) msg.textContent=""; toast("أُضيف الملف"); wireAttachments(personId,ed,category);
   });
 }
 // refresh helpers: re-fetch + rebuild, keeping the open detail
