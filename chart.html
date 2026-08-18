@@ -376,8 +376,10 @@ function renderDetail(id){
     const title=await uiPrompt("البند الجديد — ماذا يعمل هذا الشخص؟","اكتب المهمة أو المسؤولية"); if(!title)return;
     const { data, error }=await db.from("tasks").insert({ title:title.trim(), status:"not_yet_defined" }).select("id").single();
     if(error) return toast("خطأ: "+error.message);
-    await db.from("task_assignments").insert({ task_id:data.id, person_id:d.dbId });
-    openTaskCard(data.id, id);
+    const { error:ae }=await db.from("task_assignments").insert({ task_id:data.id, person_id:d.dbId });
+    if(ae) return toast("خطأ: "+ae.message);
+    // just add it and return to the person — the item is saved; click it later to attach links/files
+    toast("أُضيف البند ✓"); await refreshKeep();
   });
   const dn=document.getElementById("delNode"); dn&&(dn.onclick=async()=>{
     if(!(await uiConfirm(d.kind==="person"?"حذف هذا الشخص نهائيًا؟":"حذف هذا القسم؟")))return;
@@ -416,7 +418,8 @@ async function openTaskCard(taskId, backId){
   const ed=canEdit();
   const statusOpts=Object.entries({not_yet_defined:"غير محددة",planned:"مخطط",in_progress:"قيد التنفيذ",done:"منجزة"}).map(([v,l])=>`<option value="${v}" ${t.status===v?"selected":""}>${l}</option>`).join("");
   host.innerHTML=`
-    <button class="ebtn ebtn-sm" id="taskBack" style="margin-bottom:14px">→ رجوع</button>
+    <button class="ebtn ebtn-sm ebtn-primary" id="taskBack" style="margin-bottom:10px">${ed?"✓ حفظ ورجوع":"→ رجوع"}</button>
+    ${ed?`<p class="duties-hint" style="margin:0 0 12px">كل تغيير هنا يُحفظ تلقائيًا. أضِف الروابط أو الملفات إن رغبت، ثم اضغط «حفظ ورجوع».</p>`:""}
     <div class="detail-top"><div style="flex:1;min-width:0"><p class="detail-sub">${esc(assignees.join("، ")||"بند")}</p>
       ${ed?`<input id="tTitle" class="title-input" value="${esc(t.title)}">`:`<h2 class="detail-name">${esc(t.title)}</h2>`}</div></div>
     ${ed?`<textarea id="tDesc" class="desc-input" placeholder="الوصف / التفاصيل (اختياري)">${esc(t.description||"")}</textarea>`:(t.description?`<p class="task-desc">${esc(t.description)}</p>`:"")}
@@ -427,7 +430,13 @@ async function openTaskCard(taskId, backId){
     <div class="tasks-title" style="margin-top:16px">الملفات (PDF / Word / صور — حتى 10 ميجابايت)</div>
     <div id="fileList">${files.length?files.map(f=>`<div class="doc-row"><a data-file="${esc(f.storage_path)}">📄 ${esc(f.original_filename)}</a>${ed?`<button class="del-x" data-delfile="${f.id}" data-path="${esc(f.storage_path)}">×</button>`:""}</div>`).join(""):`<p class="empty-note">لا توجد ملفات.</p>`}</div>
     ${ed?`<div style="margin-top:10px"><input type="file" id="fUp"> <span class="empty-note" id="fMsg"></span></div>`:""}`;
-  document.getElementById("taskBack").onclick=()=>{ if(backId) renderDetail(backId); };
+  document.getElementById("taskBack").onclick=async()=>{
+    if(ed){ // belt-and-suspenders: persist title/description even if the field didn't fire onchange
+      const tt=document.getElementById("tTitle"), tds=document.getElementById("tDesc");
+      const v=tt?tt.value.trim():""; if(v) await db.from("tasks").update({ title:v, description:(tds?tds.value.trim():"")||null }).eq("id",taskId);
+    }
+    if(backId) renderDetail(backId);
+  };
   host.querySelectorAll("[data-file]").forEach(a=>a.onclick=async()=>{
     const { data, error }=await db.storage.from("task-files").createSignedUrl(a.dataset.file,120);
     if(error||!data) return toast("تحميل الملفات يتطلب تسجيل الدخول");
