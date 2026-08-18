@@ -109,10 +109,32 @@
     text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;background:var(--surface);z-index:10}
   .admin-link:hover{color:var(--accent);border-color:var(--accent)}
   @media (max-width:760px){
+    body{overflow-x:hidden;padding-bottom:64px}
+    .chart-wrap{padding:56px 12px 96px}
+    .admin-link{top:10px;left:10px;padding:7px 12px;font-size:12px}
+    .chart-head{margin-bottom:26px}
+    .chart-head h1{font-size:19px}
+    .chart-head p{font-size:12.5px}
     .branches{flex-direction:column;gap:8px}
     .branches::before,.branches .col::before{display:none}
-    .col{margin-bottom:20px}
-    .cross-band{grid-template-columns:1fr}
+    .col{margin-bottom:18px}
+    .cross-band{grid-template-columns:1fr;gap:14px}
+    /* bigger tap targets */
+    .node{padding:12px 18px;font-size:14.5px}
+    .node-label{padding:8px 12px;font-size:13px}
+    .node-owner{padding:13px 24px}
+    /* bigger, easier-to-grab drag handle on touch */
+    .grip{font-size:16px;padding:7px 10px;inset-inline-start:-11px;top:-11px}
+    .detail{padding:20px 15px;margin-top:28px}
+    .detail-name{font-size:19px}
+    .toolbar{gap:6px}
+    .ebtn{padding:10px 14px}
+    .ebtn-sm{padding:9px 13px;font-size:13px}
+    .tabbar{padding-top:6px;min-height:52px}
+    .tab{padding:12px 17px;font-size:14px}
+    /* stop iOS Safari from zooming in when a field is focused */
+    input,select,textarea{font-size:16px !important}
+    .modal{max-width:100%;padding:22px 18px}
   }
   @media (prefers-reduced-motion:reduce){.node{transition:none}}
   /* editing controls (added; do not affect the tree look) */
