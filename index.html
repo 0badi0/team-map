@@ -215,9 +215,14 @@ function canEdit(){ return ME && (ME.role==="admin"||ME.role==="editor"); }
 async function loadMe(){
   const hasTok = Object.keys(localStorage).some(k=>k.startsWith("sb-")&&k.includes("-auth-token"));
   if(!hasTok){ ME=null; return; }
+  // let the client refresh a stale-but-refreshable token, THEN validate it against the server
   let s=null; for(let i=0;i<15&&!s;i++){ s=(await db.auth.getSession()).data.session; if(!s) await new Promise(r=>setTimeout(r,180)); }
   if(!s){ ME=null; return; }
-  const { data } = await db.from("app_users").select("id,email,app_role,is_disabled").eq("id",s.user.id).maybeSingle();
+  // getUser() hits the auth server; if the session is actually dead it returns null → we treat as logged-out
+  let uid=null;
+  try{ const r=await db.auth.getUser(); if(!r.error && r.data && r.data.user) uid=r.data.user.id; }catch(_){ uid=null; }
+  if(!uid){ ME=null; return; }
+  const { data } = await db.from("app_users").select("id,email,app_role,is_disabled").eq("id",uid).maybeSingle();
   ME = (data && !data.is_disabled) ? { id:data.id, email:data.email, role:data.app_role } : null;
 }
 function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
