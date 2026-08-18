@@ -323,6 +323,13 @@ function renderDetail(id){
   const dutiesBlock = isPerson
     ? `<div class="tasks-block"><div class="tasks-title">ماذا يعمل — المهام والمسؤوليات ${ed?`<button class="ebtn ebtn-sm" id="addTask" style="float:inline-end">+ إضافة بند</button>`:""}</div>
         <p class="duties-hint">اضغط على أي بند لفتحه وإضافة الروابط والمستندات والملفات.</p>${dutyItems}</div>` : "";
+  // PERSON: contract & official documents (files download only when logged in; links open externally)
+  const contractBlock = isPerson
+    ? `<div class="tasks-block"><div class="tasks-title">📄 العقد والمستندات الرسمية</div>
+        <p class="duties-hint">عقد هذا الشخص ومستنداته — يمكن للفريق فتحها بعد تسجيل الدخول.</p>
+        <div id="contractBox"><p class="empty-note">جارٍ التحميل…</p></div>
+        ${ed?`<div class="addbar"><input id="cUrl" placeholder="رابط العقد (Google Drive / رابط PDF)…"><button class="ebtn ebtn-sm" id="cLinkAdd">إضافة رابط</button></div>
+          <div style="margin-top:10px"><label class="ebtn ebtn-sm" for="cUp" style="cursor:pointer">⬆️ رفع ملف العقد (PDF / Word — حتى 10 ميجابايت)</label><input type="file" id="cUp" style="display:none"><span class="empty-note" id="cMsg" style="margin-inline-start:8px"></span></div>`:""}</div>` : "";
   const teamsAll = teamList(LAST.groups);
   const deptBlock = (ed && d.kind==="person" && teamsAll.length)
     ? `<div class="tasks-block"><div class="tasks-title">الأقسام / الفرق <span style="font-weight:500;color:var(--faint)">(ضع الشخص في أكثر من قسم ليظهر في كلٍّ منها)</span></div>
@@ -340,10 +347,11 @@ function renderDetail(id){
     <div class="detail-stats">
       <div><b>الفريق:</b> <span>${esc(d.team)}</span></div>
       <div><b>الإدارة:</b> <span>${esc(d.manager)}</span></div>
-    </div>${respHtml}${dutiesBlock}${deptBlock}${editRow}`;
+    </div>${respHtml}${dutiesBlock}${contractBlock}${deptBlock}${editRow}`;
   host.scrollIntoView({behavior:"smooth",block:"nearest"});
   // wire edit controls
   host.querySelectorAll("[data-task]").forEach(b=>b.onclick=()=>openTaskCard(b.dataset.task, id));
+  if(isPerson) wireContracts(d.dbId, ed);
   if(!ed) return;
   host.querySelectorAll("[data-teamtoggle]").forEach(cb=>cb.onchange=async()=>{
     const gid=cb.dataset.teamtoggle;
@@ -451,6 +459,51 @@ async function openTaskCard(taskId, backId){
   });
 }
 
+// per-person CONTRACT & documents (files/links with person_id). Files download via signed URL (login required).
+async function wireContracts(personId, ed){
+  const box=document.getElementById("contractBox"); if(!box) return;
+  const [links,files]=await Promise.all([
+    db.from("links").select("*").eq("person_id",personId).is("deleted_at",null).then(r=>r.data||[]),
+    db.from("files").select("*").eq("person_id",personId).is("deleted_at",null).then(r=>r.data||[]),
+  ]);
+  const rows=[
+    ...files.map(f=>`<div class="doc-row"><a data-cfile="${esc(f.storage_path)}">📄 ${esc(f.original_filename)}</a>${ed?`<button class="del-x" data-delcfile="${f.id}" data-path="${esc(f.storage_path)}">×</button>`:""}</div>`),
+    ...links.map(l=>`<div class="doc-row"><a href="${esc(l.url)}" target="_blank" rel="noopener">🔗 ${esc(l.label||l.url)}</a>${ed?`<button class="del-x" data-delclink="${l.id}">×</button>`:""}</div>`),
+  ];
+  box.innerHTML = rows.length ? rows.join("") : `<p class="empty-note">لا يوجد عقد بعد.${ed?" ارفع ملفًا أو أضف رابطًا بالأسفل.":""}</p>`;
+  box.querySelectorAll("[data-cfile]").forEach(a=>a.onclick=async()=>{
+    const { data, error }=await db.storage.from("task-files").createSignedUrl(a.dataset.cfile,120);
+    if(error||!data) return toast("فتح العقد يتطلب تسجيل الدخول");
+    window.open(data.signedUrl,"_blank");
+  });
+  if(!ed) return;
+  box.querySelectorAll("[data-delclink]").forEach(b=>b.onclick=async()=>{
+    if(!(await uiConfirm("حذف هذا الرابط؟")))return;
+    await db.from("links").delete().eq("id",b.dataset.delclink); toast("حُذف"); wireContracts(personId,ed);
+  });
+  box.querySelectorAll("[data-delcfile]").forEach(b=>b.onclick=async()=>{
+    if(!(await uiConfirm("حذف ملف العقد؟")))return;
+    await db.storage.from("task-files").remove([b.dataset.path]);
+    await db.from("files").delete().eq("id",b.dataset.delcfile); toast("حُذف"); wireContracts(personId,ed);
+  });
+  const la=document.getElementById("cLinkAdd"); la&&(la.onclick=async()=>{
+    const inp=document.getElementById("cUrl"); const url=inp.value.trim(); if(!url) return toast("أدخل رابطًا");
+    let type="other"; if(url.includes("drive.google"))type="drive"; else if(url.includes("notion."))type="notion";
+    const { error }=await db.from("links").insert({ person_id:personId, url, link_type:type });
+    if(error) return toast("خطأ: "+error.message); inp.value=""; toast("أُضيف الرابط"); wireContracts(personId,ed);
+  });
+  const up=document.getElementById("cUp"); up&&(up.onchange=async()=>{
+    const f=up.files[0]; if(!f) return;
+    if(f.size>10*1024*1024) return toast("الملف أكبر من 10 ميجابايت");
+    const msg=document.getElementById("cMsg"); if(msg) msg.textContent="جارٍ الرفع…";
+    const path=`contracts/${personId}/${crypto.randomUUID()}-${f.name}`;
+    const { error:ue }=await db.storage.from("task-files").upload(path,f);
+    if(ue){ if(msg) msg.textContent=""; return toast("خطأ بالرفع: "+ue.message); }
+    const { error }=await db.from("files").insert({ person_id:personId, storage_path:path, original_filename:f.name, mime_type:f.type||null, size_bytes:f.size });
+    if(error){ if(msg) msg.textContent=""; return toast("خطأ: "+error.message); }
+    if(msg) msg.textContent=""; toast("أُضيف العقد"); wireContracts(personId,ed);
+  });
+}
 // refresh helpers: re-fetch + rebuild, keeping the open detail
 async function refreshKeep(){ const keep=selectedId; await refreshAll(keep); }
 async function refreshAll(keep){ await boot(keep||selectedId); }
