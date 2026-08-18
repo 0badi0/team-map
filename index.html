@@ -221,6 +221,41 @@ async function loadMe(){
   ME = (data && !data.is_disabled) ? { id:data.id, email:data.email, role:data.app_role } : null;
 }
 function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),2200); }
+// in-page dialogs (native confirm()/prompt() are unreliable/suppressed in some mobile & in-app browsers)
+function uiConfirm(message, okLabel){
+  return new Promise(resolve=>{
+    const wrap=document.createElement("div"); wrap.className="modal-bg open";
+    wrap.innerHTML=`<div class="modal" style="max-width:340px">
+        <p style="margin:0 0 20px;font-size:15.5px;font-weight:700;line-height:1.7">${esc(message)}</p>
+        <div style="display:flex;gap:8px">
+          <button class="ebtn ebtn-danger" id="ucYes" style="flex:1">${esc(okLabel||"حذف")}</button>
+          <button class="ebtn" id="ucNo" style="flex:1">إلغاء</button>
+        </div></div>`;
+    document.body.appendChild(wrap);
+    const done=v=>{ wrap.remove(); resolve(v); };
+    wrap.querySelector("#ucYes").onclick=()=>done(true);
+    wrap.querySelector("#ucNo").onclick=()=>done(false);
+    wrap.addEventListener("click",e=>{ if(e.target===wrap) done(false); });
+  });
+}
+function uiPrompt(message, placeholder){
+  return new Promise(resolve=>{
+    const wrap=document.createElement("div"); wrap.className="modal-bg open";
+    wrap.innerHTML=`<div class="modal" style="max-width:360px">
+        <label class="mfield" style="font-weight:700">${esc(message)}<input id="upIn" type="text" placeholder="${esc(placeholder||"")}"></label>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="ebtn ebtn-primary" id="upOk" style="flex:1">حفظ</button>
+          <button class="ebtn" id="upNo">إلغاء</button>
+        </div></div>`;
+    document.body.appendChild(wrap);
+    const inp=wrap.querySelector("#upIn"); inp.focus();
+    const done=v=>{ wrap.remove(); resolve(v); };
+    wrap.querySelector("#upOk").onclick=()=>done(inp.value.trim()||null);
+    wrap.querySelector("#upNo").onclick=()=>done(null);
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter") done(inp.value.trim()||null); });
+    wrap.addEventListener("click",e=>{ if(e.target===wrap) done(null); });
+  });
+}
 
 // Fixed seed IDs — these define the exact chart layout (mirrors the app).
 const P = {
@@ -318,32 +353,35 @@ function renderDetail(id){
   });
   host.querySelectorAll("[data-deltask]").forEach(b=>b.onclick=async(e)=>{
     e.stopPropagation();
-    if(!confirm("حذف هذا البند؟"))return;
-    await db.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",b.dataset.deltask);
-    await refreshKeep();
+    if(!(await uiConfirm("حذف هذا البند؟")))return;
+    const { data:upd, error }=await db.from("tasks").update({deleted_at:new Date().toISOString()}).eq("id",b.dataset.deltask).select("id");
+    if(error) return toast("تعذّر الحذف: "+error.message);
+    if(!upd||!upd.length) return toast("لم يتمّ الحذف — سجّل الخروج ثم الدخول وحاول مجددًا");
+    toast("تم الحذف"); await refreshKeep();
   });
   const at=document.getElementById("addTask"); at&&(at.onclick=async()=>{
-    const title=prompt("البند الجديد (ماذا يعمل هذا الشخص؟):"); if(!title||!title.trim())return;
+    const title=await uiPrompt("البند الجديد — ماذا يعمل هذا الشخص؟","اكتب المهمة أو المسؤولية"); if(!title)return;
     const { data, error }=await db.from("tasks").insert({ title:title.trim(), status:"not_yet_defined" }).select("id").single();
     if(error) return toast("خطأ: "+error.message);
     await db.from("task_assignments").insert({ task_id:data.id, person_id:d.dbId });
     openTaskCard(data.id, id);
   });
   const dn=document.getElementById("delNode"); dn&&(dn.onclick=async()=>{
-    if(!confirm("حذف هذا العنصر؟"))return;
+    if(!(await uiConfirm(d.kind==="person"?"حذف هذا الشخص نهائيًا؟":"حذف هذا القسم؟")))return;
+    let res;
     if(d.kind==="person"){
       // remove the person's links first so no blank "?" card is left behind, then soft-delete
       await db.from("person_org_group_memberships").delete().eq("person_id",d.dbId);
       await db.from("org_group_managers").delete().eq("person_id",d.dbId);
       await db.from("task_assignments").delete().eq("person_id",d.dbId);
-      const { error }=await db.from("people").update({deleted_at:new Date().toISOString()}).eq("id",d.dbId);
-      if(error) return toast("تعذّر الحذف: "+error.message);
+      res=await db.from("people").update({deleted_at:new Date().toISOString()}).eq("id",d.dbId).select("id");
     } else {
       await db.from("person_org_group_memberships").delete().eq("org_group_id",d.dbId);
       await db.from("org_group_managers").delete().eq("org_group_id",d.dbId);
-      const { error }=await db.from("org_groups").update({deleted_at:new Date().toISOString()}).eq("id",d.dbId);
-      if(error) return toast("تعذّر الحذف: "+error.message);
+      res=await db.from("org_groups").update({deleted_at:new Date().toISOString()}).eq("id",d.dbId).select("id");
     }
+    if(res.error) return toast("تعذّر الحذف: "+res.error.message);
+    if(!res.data||!res.data.length) return toast("لم يتمّ الحذف — سجّل الخروج ثم الدخول وحاول مجددًا");
     toast("تم الحذف"); await refreshAll();
   });
 }
@@ -494,6 +532,7 @@ function build(data){
 
   // ---- node builders ----
   const pNode = (id, kind="person") => nodeHtml(byId(id)?.full_name_ar ?? "?", kind, id);
+  const pNodeIf = (id, kind="person") => byId(id) ? pNode(id, kind) : ""; // skip deleted/missing people (no "?" ghost)
   const gNode = (slug, kind="group") => { const g=groupBySlug.get(slug); return nodeHtml(g?.name_ar ?? slug, kind, slug); };
   const mgmtId = groupBySlug.get("management")?.id, mediaId = groupBySlug.get("media")?.id, salesId = groupBySlug.get("sales")?.id;
   const editing = canEdit();
@@ -537,11 +576,11 @@ function build(data){
     <hr class="divider" />
     <div class="cross-band">
       <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Freelancers</div>
-        <div class="cross-wrap">${gNode("setters")}${gNode("closers")}${pNode(P.raafat)}${pNode(P.anas)}${gNode("freelance-editors")}</div></div>
+        <div class="cross-wrap">${gNode("setters")}${gNode("closers")}${pNodeIf(P.raafat)}${pNodeIf(P.anas)}${gNode("freelance-editors")}</div></div>
       <div class="cross-col"><div class="cross-title"><span class="arrow-ico">←</span> Operations</div>
-        <div class="cross-wrap">${pNode(P.kamal)}${pNode(P.osama)}</div></div>
+        <div class="cross-wrap">${pNodeIf(P.kamal)}${pNodeIf(P.osama)}</div></div>
       <div class="cross-col"><div class="cross-title">علاقة شخصية مباشرة</div>
-        <div class="pa-line">${pNode(P.ali)}<span class="arrow-ico">←</span>${pNode(P.kamal)}</div></div>
+        <div class="pa-line">${pNodeIf(P.ali)}<span class="arrow-ico">←</span>${pNodeIf(P.kamal)}</div></div>
     </div>`;
   } else {
     const cols = groups.filter(g=>g.page_id===CURRENT_PAGE);
@@ -702,7 +741,7 @@ async function dragEnd(){
 // =========================================================================================
 async function addDeptFlow(){
   const label = CURRENT_PAGE==null ? "القسم / الفريق" : "العمود";
-  const name=prompt(`اسم ${label} الجديد:`); if(!name||!name.trim())return;
+  const name=await uiPrompt(`اسم ${label} الجديد`, label); if(!name)return;
   const base=name.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^\w\-]/g,"")||"col";
   const slug=base+"-"+Math.floor(Math.random()*1e6); // keep slugs unique across pages
   const { data, error }=await db.from("org_groups").insert({ name_ar:name.trim(), slug, group_type:"team", page_id:CURRENT_PAGE }).select("slug").single();
@@ -711,7 +750,7 @@ async function addDeptFlow(){
 }
 // ---- pages (Excel-style tabs) ----
 async function addPageFlow(){
-  const name=prompt("اسم الصفحة الجديدة:"); if(!name||!name.trim())return;
+  const name=await uiPrompt("اسم الصفحة الجديدة","مثال: قمع المبيعات"); if(!name)return;
   const pos=(LAST.pages||[]).length;
   const { data, error }=await db.from("pages").insert({ name_ar:name.trim(), position:pos }).select("id").single();
   if(error) return toast("تعذّر إضافة الصفحة: "+error.message);
@@ -719,15 +758,16 @@ async function addPageFlow(){
 }
 async function delPageFlow(){
   if(CURRENT_PAGE==null) return;
-  if(!confirm("حذف هذه الصفحة وكل أعمدتها؟"))return;
+  if(!(await uiConfirm("حذف هذه الصفحة وكل أعمدتها؟")))return;
   const pid=CURRENT_PAGE;
   const groupIds=(LAST.groups||[]).filter(g=>g.page_id===pid).map(g=>g.id);
   if(groupIds.length){
     await db.from("person_org_group_memberships").delete().in("org_group_id",groupIds);
     await db.from("org_group_managers").delete().in("org_group_id",groupIds);
   }
-  const { error }=await db.from("pages").delete().eq("id",pid);
+  const { data, error }=await db.from("pages").delete().eq("id",pid).select("id");
   if(error) return toast("تعذّر حذف الصفحة: "+error.message);
+  if(!data||!data.length) return toast("لم يتمّ الحذف — سجّل الخروج ثم الدخول وحاول مجددًا");
   CURRENT_PAGE=null; toast("حُذفت الصفحة"); await refreshAll();
 }
 
