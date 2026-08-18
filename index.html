@@ -149,6 +149,16 @@
     padding:9px 18px;border-radius:999px;font-size:13px;font-weight:600;z-index:70;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:.94}
   .toolbar{display:flex;gap:8px;justify-content:center;margin:-24px 0 28px;flex-wrap:wrap}
+  /* Excel-style page tabs pinned to the bottom */
+  body{padding-bottom:58px}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:55;display:flex;gap:3px;align-items:flex-end;
+    background:var(--surface);border-top:1px solid var(--border);padding:8px 12px 0;overflow-x:auto;min-height:46px}
+  .tab{flex:none;border:1px solid transparent;background:transparent;color:var(--muted);font-family:inherit;font-size:13px;font-weight:600;
+    padding:8px 16px;border-radius:9px 9px 0 0;cursor:pointer;white-space:nowrap}
+  .tab:hover{color:var(--foreground);background:rgba(125,125,125,.08)}
+  .tab-active{color:var(--accent);background:var(--background);border-color:var(--border);border-bottom-color:var(--background);margin-bottom:-1px}
+  .tab-add{font-size:17px;color:var(--muted);padding:6px 12px}
+  .page-empty{text-align:center;padding:60px 20px}
   .tck-list{display:flex;flex-direction:column;gap:2px;max-height:240px;overflow:auto;margin-top:2px}
   .tck{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;font-size:14px;cursor:pointer;border:1px solid transparent}
   .tck:hover{background:rgba(125,125,125,.10)}
@@ -217,6 +227,8 @@ async function sb(path){
 }
 
 let DETAILS = {}, DEFAULT_ID = P.ahmad;
+let LAST = {};
+let CURRENT_PAGE = null; // null = the main org-chart page; otherwise a pages.id
 
 function statusLabel(s){ return {not_yet_defined:"غير محددة",planned:"مخطط",in_progress:"قيد التنفيذ",done:"منجزة"}[s]||s; }
 
@@ -471,16 +483,26 @@ function build(data){
     if(!rows.length) return `<div class="levels" data-team="${teamId}"><span class="empty-note">لا أعضاء بعد — أضِف شخصًا</span></div>`;
     return `<div class="levels" data-team="${teamId}">${rows.map((ids,i)=>`${i>0?`<div class="stem-arrow"></div>`:""}<div class="lvl" data-level="${i}"><div class="row">${ids.map(id=>pCard(id,teamId)).join("")}</div></div>`).join("")}</div>`;
   };
-  // brand-new top-level teams (departments) become their own columns
-  const knownTeams = ["management","media","sales"];
-  const newTeams = groups.filter(g=>g.group_type==="team" && !knownTeams.includes(g.slug));
   const teamCol = g => `<div class="col">${nodeHtml(g.name_ar,"label",g.slug)}<div class="stem-arrow"></div>${deptLevels(g.id)}</div>`;
-  const toolbar = canEdit() ? `<div class="toolbar"><button class="ebtn ebtn-sm" id="addPersonBtn">+ شخص</button><button class="ebtn ebtn-sm" id="addDeptBtn">+ قسم / فريق</button></div>` : "";
+  const pages = data.pages || [];
+  // guard: if the current page was deleted, fall back to the main org page
+  if(CURRENT_PAGE!=null && !pages.some(p=>p.id===CURRENT_PAGE)) CURRENT_PAGE=null;
+  const isOrg = (CURRENT_PAGE==null);
+  const curPage = isOrg ? null : pages.find(p=>p.id===CURRENT_PAGE);
 
-  const html = `
-  <div class="chart-wrap">
-    <div class="chart-head"><h1>خريطة الفريق</h1><p>اضغط على أي اسم أو مجموعة لعرض تفاصيلها بالأسفل</p></div>
-    ${toolbar}
+  const toolbar = canEdit() ? `<div class="toolbar">
+      <button class="ebtn ebtn-sm" id="addPersonBtn">+ شخص</button>
+      <button class="ebtn ebtn-sm" id="addDeptBtn">+ ${isOrg?"قسم / فريق":"عمود"}</button>
+      ${!isOrg?`<button class="ebtn ebtn-sm ebtn-danger" id="delPageBtn">حذف الصفحة</button>`:""}
+    </div>` : "";
+
+  // ---- main content: the org chart (page 1) or a standalone page board ----
+  let mainHtml, headHtml;
+  if(isOrg){
+    const knownTeams = ["management","media","sales"];
+    const newTeams = groups.filter(g=>g.group_type==="team" && !knownTeams.includes(g.slug) && !g.page_id);
+    headHtml = `<div class="chart-head"><h1>خريطة الفريق</h1><p>اضغط على أي اسم أو مجموعة لعرض تفاصيلها بالأسفل</p></div>`;
+    mainHtml = `
     <div class="trunk">${nodeHtml("علي — صاحب الشركة","owner",P.ali)}<div class="stem-arrow"></div>${nodeHtml("Teams","label","teams")}</div>
     <div class="branches">
       <div class="col">${nodeHtml("Management","label","management")}<div class="stem-arrow"></div>${deptLevels(mgmtId)}</div>
@@ -498,28 +520,59 @@ function build(data){
         <div class="cross-wrap">${pNode(P.kamal)}${pNode(P.osama)}</div></div>
       <div class="cross-col"><div class="cross-title">علاقة شخصية مباشرة</div>
         <div class="pa-line">${pNode(P.ali)}<span class="arrow-ico">←</span>${pNode(P.kamal)}</div></div>
-    </div>
+    </div>`;
+  } else {
+    const cols = groups.filter(g=>g.page_id===CURRENT_PAGE);
+    headHtml = `<div class="chart-head"><h1>${esc(curPage.name_ar)}</h1><p>صفحة مستقلة — أضِف الأعمدة واسحب العناصر لترتيبها</p></div>`;
+    mainHtml = cols.length
+      ? `<div class="branches">${cols.map(teamCol).join("")}</div>`
+      : `<div class="page-empty"><p class="empty-note">هذه الصفحة فارغة.${canEdit()?" اضغط «+ عمود» ثم «+ شخص» لبنائها.":""}</p></div>`;
+  }
+
+  const tabbar = `<div class="tabbar">
+      <button class="tab ${isOrg?"tab-active":""}" data-page="">الفريق</button>
+      ${pages.map(p=>`<button class="tab ${p.id===CURRENT_PAGE?"tab-active":""}" data-page="${p.id}">${esc(p.name_ar)}</button>`).join("")}
+      ${canEdit()?`<button class="tab tab-add" id="addPageBtn" title="أضِف صفحة">＋</button>`:""}
+    </div>`;
+
+  const html = `
+  <div class="chart-wrap">
+    ${headHtml}
+    ${toolbar}
+    ${mainHtml}
     <div class="detail" id="detail"></div>
-  </div>`;
+  </div>
+  ${tabbar}`;
 
   document.getElementById("app").innerHTML = html;
   document.querySelectorAll(".node").forEach(n=>{
     if(!n.dataset.detail) return;
     n.addEventListener("click", ()=>renderDetail(n.dataset.detail));
   });
+  document.querySelectorAll(".tab[data-page]").forEach(t=>t.onclick=()=>{
+    const pid=t.dataset.page||null;
+    if(pid===CURRENT_PAGE) return;
+    CURRENT_PAGE=pid; build({...LAST});
+  });
+  const apg=document.getElementById("addPageBtn"); apg&&(apg.onclick=addPageFlow);
+  const dpg=document.getElementById("delPageBtn"); dpg&&(dpg.onclick=delPageFlow);
   wireDrag();
   const ap=document.getElementById("addPersonBtn"); ap&&(ap.onclick=addPersonFlow);
   const ad=document.getElementById("addDeptBtn"); ad&&(ad.onclick=addDeptFlow);
-  const first = (data.keepId && DETAILS[data.keepId]) ? data.keepId : DEFAULT_ID;
-  renderDetail(first);
+  // pick a default detail: keep the open one, else on the org page show the owner, else the page's first column
+  let first = (data.keepId && DETAILS[data.keepId]) ? data.keepId : null;
+  if(!first) first = isOrg ? DEFAULT_ID : (groups.find(g=>g.page_id===CURRENT_PAGE)?.slug || null);
+  if(first && DETAILS[first]) renderDetail(first);
+  else document.getElementById("detail").innerHTML = `<p class="empty-note">اختر عنصرًا من الأعلى لعرض تفاصيله.</p>`;
 }
 
-// team list for adding a person
+// teams available for the CURRENT page (org page = groups with no page_id; a page = its own groups)
 function teamList(groups){ return (groups||[]).filter(g=>g.group_type==="team"); }
+function pageTeams(){ return teamList(LAST.groups).filter(g=> CURRENT_PAGE==null ? !g.page_id : g.page_id===CURRENT_PAGE); }
 // add a person and place them in ONE OR MORE departments at once (checkbox modal)
 function addPersonFlow(){
-  const teams=teamList(LAST.groups);
-  if(!teams.length) return toast("أضِف قسمًا أولاً");
+  const teams=pageTeams();
+  if(!teams.length) return toast(CURRENT_PAGE==null?"أضِف قسمًا أولاً":"أضِف عمودًا أولاً");
   const wrap=document.createElement("div");
   wrap.className="modal-bg open";
   wrap.innerHTML=`<div class="modal">
@@ -626,17 +679,39 @@ async function dragEnd(){
 }
 // =========================================================================================
 async function addDeptFlow(){
-  const name=prompt("اسم القسم / الفريق الجديد:"); if(!name||!name.trim())return;
-  const slug=name.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^\w\-]/g,"")||("team"+Math.floor(Math.random()*1e6));
-  const { data, error }=await db.from("org_groups").insert({ name_ar:name.trim(), slug, group_type:"team" }).select("slug").single();
+  const label = CURRENT_PAGE==null ? "القسم / الفريق" : "العمود";
+  const name=prompt(`اسم ${label} الجديد:`); if(!name||!name.trim())return;
+  const base=name.trim().toLowerCase().replace(/\s+/g,"-").replace(/[^\w\-]/g,"")||"col";
+  const slug=base+"-"+Math.floor(Math.random()*1e6); // keep slugs unique across pages
+  const { data, error }=await db.from("org_groups").insert({ name_ar:name.trim(), slug, group_type:"team", page_id:CURRENT_PAGE }).select("slug").single();
   if(error) return toast("خطأ: "+error.message);
-  toast("أُضيف القسم"); await refreshAll(data.slug);
+  toast("أُضيف "+label); await refreshAll(data.slug);
+}
+// ---- pages (Excel-style tabs) ----
+async function addPageFlow(){
+  const name=prompt("اسم الصفحة الجديدة:"); if(!name||!name.trim())return;
+  const pos=(LAST.pages||[]).length;
+  const { data, error }=await db.from("pages").insert({ name_ar:name.trim(), position:pos }).select("id").single();
+  if(error) return toast("تعذّر إضافة الصفحة: "+error.message);
+  CURRENT_PAGE=data.id; toast("أُضيفت الصفحة"); await refreshAll();
+}
+async function delPageFlow(){
+  if(CURRENT_PAGE==null) return;
+  if(!confirm("حذف هذه الصفحة وكل أعمدتها؟"))return;
+  const pid=CURRENT_PAGE;
+  const groupIds=(LAST.groups||[]).filter(g=>g.page_id===pid).map(g=>g.id);
+  if(groupIds.length){
+    await db.from("person_org_group_memberships").delete().in("org_group_id",groupIds);
+    await db.from("org_group_managers").delete().in("org_group_id",groupIds);
+  }
+  const { error }=await db.from("pages").delete().eq("id",pid);
+  if(error) return toast("تعذّر حذف الصفحة: "+error.message);
+  CURRENT_PAGE=null; toast("حُذفت الصفحة"); await refreshAll();
 }
 
-let LAST = {};
 async function boot(keepId){
   try {
-    const [people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks] = await Promise.all([
+    const [people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks, pages] = await Promise.all([
       sb("people?deleted_at=is.null&select=*"),
       sb("org_groups?deleted_at=is.null&select=*"),
       sb("org_group_managers?select=*&order=display_order"),
@@ -646,8 +721,9 @@ async function boot(keepId){
       sb("responsibilities?select=id,person_id,description_ar,display_order&order=display_order"),
       sb("task_assignments?select=*"),
       sb("tasks?deleted_at=is.null&select=id,title,status,is_top_priority,created_at&order=created_at"),
+      sb("pages?select=*&order=position"),
     ]);
-    LAST = {people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks};
+    LAST = {people, groups, managers, memberships, roles, personRoles, responsibilities, assignments, tasks, pages};
     build({...LAST, keepId});
   } catch(e){
     document.getElementById("app").innerHTML = `<div class="state err">تعذّر تحميل البيانات.<br>${esc(e.message)}</div>`;
